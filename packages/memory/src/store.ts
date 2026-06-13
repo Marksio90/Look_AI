@@ -141,6 +141,43 @@ export class MemoryStore {
     }
     return results;
   }
+
+  // Artifacts (non-code documents)
+  private artifactDir: string;
+
+  saveArtifact(name: string, content: string): void {
+    const path = join(this.artifactDir, `${safeKey(name)}.md`);
+    writeFileSync(path, content, "utf-8");
+  }
+
+  loadArtifact(name: string): string | null {
+    const path = join(this.artifactDir, `${safeKey(name)}.md`);
+    if (!existsSync(path)) return null;
+    return readFileSync(path, "utf-8");
+  }
+
+  deleteArtifact(name: string): boolean {
+    const path = join(this.artifactDir, `${safeKey(name)}.md`);
+    if (!existsSync(path)) return false;
+    // eslint-disable-next-line no-restricted-syntax
+    const { unlinkSync } = require("node:fs");
+    unlinkSync(path);
+    return true;
+  }
+
+  listArtifacts(): Array<{ name: string; updatedAt: number; size: number }> {
+    if (!existsSync(this.artifactDir)) return [];
+    const entries = readdirSync(this.artifactDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => {
+        const name = f.replace(".md", "");
+        const path = join(this.artifactDir, f);
+        const stat = statSync(path);
+        return { name, updatedAt: stat.mtimeMs, size: stat.size };
+      });
+    entries.sort((a, b) => b.updatedAt - a.updatedAt);
+    return entries;
+  }
 }
 
 function safeKey(key: string): string {
