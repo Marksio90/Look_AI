@@ -137,6 +137,69 @@ function jsonSchemaToZod(schema: unknown): z.ZodTypeAny {
     return z.record(z.any());
   }
   const s = schema as Record<string, unknown>;
+
+  // Handle $ref (simplified — resolve local refs only)
+  if (s.$ref && typeof s.$ref === "string") {
+    return z.any(); // Ref resolution requires full schema context
+  }
+
+  // Handle anyOf / oneOf
+  if (s.anyOf && Array.isArray(s.anyOf)) {
+    const variants = s.anyOf.map((v) => jsonSchemaToZod(v));
+    if (variants.length === 0) return z.any();
+    return variants.reduce((acc, v) => acc.or(v)) as z.ZodTypeAny;
+  }
+  if (s.oneOf && Array.isArray(s.oneOf)) {
+    const variants = s.oneOf.map((v) => jsonSchemaToZod(v));
+    if (variants.length === 0) return z.any();
+    return variants.reduce((acc, v) => acc.or(v)) as z.ZodTypeAny;
+  }
+  if (s.allOf && Array.isArray(s.allOf)) {
+    // allOf = intersection; simplified to object merge
+    const objects = s.allOf.filter((a) => {
+      const ao = a as Record<string, unknown>;
+      return ao.type === "object";
+    });
+    if (objects.length === 0) return z.any();
+    const mergedShape: Record<string, z.ZodTypeAny> = {};
+    for (const obj of objects) {
+      const o = obj as Record<string, unknown>;
+      const props = (o.properties ?? {}) as Record<string, unknown>;
+      const req = (o.required ?? []) as string[];
+      for (const [key, prop] of Object.entries(props)) {
+        mergedShape[key] = req.includes(key) ? jsonSchemaToZod(prop) : jsonSchemaToZod(prop).optional();
+      }
+    }
+    return z.object(mergedShape);
+  }
+
+  // Handle enum
+  if (s.enum && Array.isArray(s.enum) && s.enum.length > 0) {
+    const values = s.enum;
+    if (values.every((v) => typeof v === "string")) {
+      return z.enum(values as [string, ...string[]]);
+    }
+    return z.union(values.map((v) => z.literal(v)) as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
+  }
+
+  // Handle const
+  if (s.const !== undefined) {
+    return z.literal(s.const as string | number | boolean);
+  }
+
+  // Handle types array
+  if (Array.isArray(s.type)) {
+    const types = s.type as string[];
+    if (types.includes("null")) {
+      const nonNull = types.find((t) => t !== "null");
+      if (nonNull) {
+        return jsonSchemaToZod({ ...s, type: nonNull }).nullable();
+      }
+      return z.null();
+    }
+    return z.any();
+  }
+
   if (s.type === "object") {
     const properties = (s.properties ?? {}) as Record<string, unknown>;
     const required = (s.required ?? []) as string[];
@@ -145,15 +208,50 @@ function jsonSchemaToZod(schema: unknown): z.ZodTypeAny {
       const isRequired = required.includes(key);
       shape[key] = isRequired ? jsonSchemaToZod(prop) : jsonSchemaToZod(prop).optional();
     }
-    return z.object(shape);
+    let obj = z.object(shape);
+    if (s.additionalProperties === true) {
+      obj = obj.catchall(z.any());
+    } else if (s.additionalProperties === false) {
+      obj = obj.strict();
+    }
+    return obj;
   }
-  if (s.type === "string") return z.string();
-  if (s.type === "number") return z.number();
-  if (s.type === "integer") return z.number().int();
+
+  if (s.type === "string") {
+    let str = z.string();
+    if (s.minLength && typeof s.minLength === "number") str = str.min(s.minLength);
+    if (s.maxLength && typeof s.maxLength === "number") str = str.max(s.maxLength);
+    if (s.pattern && typeof s.pattern === "string") {
+      try { str = str.regex(new RegExp(s.pattern)); } catch { /* ignore invalid regex */ }
+    }
+    if (s.format === "email") str = str.email();
+    if (s.format === "url" || s.format === "uri") str = str.url();
+    return str;
+  }
+
+  if (s.type === "number") {
+    let num = z.number();
+    if (s.minimum !== undefined && typeof s.minimum === "number") num = num.min(s.minimum);
+    if (s.maximum !== undefined && typeof s.maximum === "number") num = num.max(s.maximum);
+    return num;
+  }
+
+  if (s.type === "integer") {
+    let num = z.number().int();
+    if (s.minimum !== undefined && typeof s.minimum === "number") num = num.min(s.minimum);
+    if (s.maximum !== undefined && typeof s.maximum === "number") num = num.max(s.maximum);
+    return num;
+  }
+
   if (s.type === "boolean") return z.boolean();
+
+  if (s.type === "null") return z.null();
+
   if (s.type === "array") {
     return z.array(jsonSchemaToZod(s.items));
   }
+
+  // Default: any
   return z.any();
 }
 
