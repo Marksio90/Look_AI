@@ -28,6 +28,7 @@ function makeToolResultMessage(toolCall: ToolCall, result: ToolResult): Message 
 }
 
 export class AgentRuntime {
+  private mode: SessionMode;
   private router: DualModelRouter;
   private registry: ToolRegistry;
   private config: RuntimeConfig;
@@ -42,7 +43,7 @@ export class AgentRuntime {
     router: DualModelRouter,
     registry: ToolRegistry,
     config: RuntimeConfig,
-    deps?: { permissionEngine?: PermissionEngine; promptAssembler?: PromptAssembler; memoryStore?: MemoryStore }
+    deps?: { permissionEngine?: PermissionEngine; promptAssembler?: PromptAssembler; memoryStore?: MemoryStore; mode?: SessionMode }
   ) {
     this.router = router;
     this.registry = registry;
@@ -50,6 +51,7 @@ export class AgentRuntime {
     this.permissionEngine = deps?.permissionEngine;
     this.promptAssembler = deps?.promptAssembler;
     this.memoryStore = deps?.memoryStore;
+    this.mode = deps?.mode ?? "coding" as SessionMode;
   }
 
   getMessages(): readonly Message[] {
