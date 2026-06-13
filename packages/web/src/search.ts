@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Tool, ToolResult } from "@lookai/shared";
 
 export interface SearchAdapter {
+  // eslint-disable-next-line no-unused-vars
   search(query: string, limit?: number): Promise<Array<{ title: string; url: string; snippet: string }>>;
 }
 
