@@ -1,9 +1,4 @@
-export enum SessionMode {
-  // eslint-disable-next-line no-unused-vars
-  Assistant = "assistant",
-  // eslint-disable-next-line no-unused-vars
-  Coding = "coding",
-}
+export type SessionMode = "assistant" | "coding";
 
 export const ASSISTANT_SYSTEM_PROMPT = `You are LookAI, a helpful local assistant. You can:
 - Search the web (web_search, web_fetch) for research and facts.

@@ -5,6 +5,8 @@ import type { PermissionEngine } from "@lookai/security";
 import type { PromptAssembler } from "@lookai/context";
 import type { MemoryStore } from "@lookai/memory";
 import type { RuntimeConfig, TurnHandler, UsageTracker } from "./types.js";
+import type { SessionMode } from "./modes.js";
+import { ASSISTANT_SYSTEM_PROMPT, CODING_SYSTEM_PROMPT } from "./modes.js";
 
 function makeSystemMessage(prompt: string): Message {
   return { role: "system", content: prompt };
@@ -67,9 +69,8 @@ export class AgentRuntime {
     this.tracker = { totalTokens: 0, totalPromptTokens: 0, totalCompletionTokens: 0, turns: 0 };
     this.readFiles.clear();
 
-    if (this.config.systemPrompt) {
-      this.messages.push(makeSystemMessage(this.config.systemPrompt));
-    }
+    const systemPrompt = this.mode === "assistant" ? ASSISTANT_SYSTEM_PROMPT : CODING_SYSTEM_PROMPT;
+    this.messages.push(makeSystemMessage(systemPrompt));
     this.messages.push(makeUserMessage(userPrompt));
 
     // Load previous session if --resume
@@ -93,11 +94,17 @@ export class AgentRuntime {
         }
       }
 
-      // Determine model: planning turns (first and every 5th) -> Brain; else Worker
+      // Determine model: assistant mode → Brain for synthesis; coding → Brain for planning
       const isPlanningTurn = turn === 0 || turn % 5 === 0;
       const mode = isPlanningTurn ? "brain" : "worker";
 
-      const response = await this.router.create(this.messages, this.registry.toolDefs(), { mode });
+      // Filter tools by mode
+      const allTools = this.registry.toolDefs();
+      const allowedTools = this.mode === "assistant"
+        ? allTools.filter((t) => !["write", "edit", "bash"].includes(t.name))
+        : allTools;
+
+      const response = await this.router.create(this.messages, allowedTools, { mode });
       this.tracker.totalPromptTokens += response.usage.promptTokens;
       this.tracker.totalCompletionTokens += response.usage.completionTokens;
       this.tracker.totalTokens += response.usage.totalTokens;
@@ -156,7 +163,7 @@ export class AgentRuntime {
           this.router.recordToolUseBad();
         }
 
-        // Escalation: 2 bad tool uses -> switch to Brain for next turn
+        // Escalation: 2 bad tool uses → switch to Brain for next turn
         if (this.router.shouldEscalate()) {
           await onTurn?.({ type: "text", text: "[Escalating to Brain model due to repeated tool errors]", usage: response.usage, model: response.model });
           this.router.resetEscalation();
