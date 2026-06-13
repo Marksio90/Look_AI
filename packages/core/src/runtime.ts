@@ -36,7 +36,7 @@ export class AgentRuntime {
   private config: RuntimeConfig;
   private messages: Message[] = [];
   private tracker: UsageTracker = { totalTokens: 0, totalPromptTokens: 0, totalCompletionTokens: 0, turns: 0 };
-  private readFiles = new Set<string>();
+  private readFiles = new Map<string, number>(); // path -> mtimeMs at read time
   private permissionEngine?: PermissionEngine;
   private promptAssembler?: PromptAssembler;
   private memoryStore?: MemoryStore;
@@ -189,16 +189,33 @@ export class AgentRuntime {
       }
     }
 
-    // Read-before-Edit enforcement
+    // Read-before-Edit enforcement + staleness check
     if (tc.name === "edit") {
       const path = String(tc.arguments?.path ?? "");
-      if (!this.readFiles.has(path)) {
+      const readMtime = this.readFiles.get(path);
+      if (readMtime === undefined) {
         return { ok: false, error: `Edit rejected: file "${path}" was not read first.` };
+      }
+      // Staleness check: compare current mtime vs mtime at read time
+      try {
+        const { statSync } = await import("node:fs");
+        const currentMtime = statSync(path).mtimeMs;
+        if (currentMtime !== readMtime) {
+          return { ok: false, error: `Edit rejected: file "${path}" changed on disk since it was read (mtime ${currentMtime} != ${readMtime}). Please read it again.` };
+        }
+      } catch {
+        // File may have been deleted since read; let EditTool handle it
       }
     }
     if (tc.name === "read") {
       const path = String(tc.arguments?.path ?? "");
-      this.readFiles.add(path);
+      try {
+        const { statSync } = await import("node:fs");
+        this.readFiles.set(path, statSync(path).mtimeMs);
+      } catch {
+        // File may not exist; still record it so edit knows it was attempted
+        this.readFiles.set(path, 0);
+      }
     }
     return this.registry.dispatch(tc.name, tc.arguments);
   }
