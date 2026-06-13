@@ -25,6 +25,7 @@
     "@lookai/context": "workspace:*",
     "@lookai/memory": "workspace:*",
     "@lookai/sandbox": "workspace:*",
+    "@lookai/mcp": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

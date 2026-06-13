@@ -119,6 +119,9 @@ importers:
       '@lookai/llm':
         specifier: workspace:*
         version: link:../llm
+      '@lookai/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@lookai/memory':
         specifier: workspace:*
         version: link:../memory
