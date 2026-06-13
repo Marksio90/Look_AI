@@ -1,3 +1,81 @@
+# LookAI — Faza 2 (Zakończona)
+
+## Cel fazy
+Implementacja: MCP client (JSON-RPC 2.0, stdio + Streamable HTTP), subagenty (izolowane runtime'y), sandbox (Docker/WSL2 ephemeral + egress proxy), hooks (Pre/PostToolUse), vLLM adapter.
+
+## Co dostarczono
+
+### 1. packages/mcp — MCP Client
+- **McpClientManager**: lifecycle `initialize → listTools → callTool → shutdown`.
+- **Transporty**: `StdioClientTransport` (serwery lokalne) + `StreamableHTTPClientTransport` (zdalne, przez URL).
+- **Tool discovery**: `listTools()` zwraca narzędzia z opisami i schematami JSON Schema.
+- **Konwersja do LookAI**: `mcpToolToLookaiTool()` tworzy `Tool` z prefixem `serverName_` i walidacją Zod (best-effort JSON Schema → Zod).
+- **ReadResource**: `readResource()` — tekst zwracany bezpośrednio, binaria zapisywana do temp i zwracana ścieżka.
+- **Rejestracja**: MCP tools rejestrowane w `ToolRegistry` jak natywne narzędzia.
+
+### 2. packages/core/task — Subagenty
+- **runSubagent()**: izolowany `AgentRuntime` z własną tablicą wiadomości (bez write/edit).
+- **Typy**: `explore` (mapowanie kodu), `plan` (planowanie), `general` (research).
+- **Kompakcja 95%**: subagenty mają ciaśniejszy budżet (4096 tokens, preserve 2 turns) niż główny wątek.
+- **Bez zagnieżdżania**: subagent nie ma dostępu do `runSubagent`.
+- **Zwraca tylko podsumowanie**: ~4000 znaków z powrotem do wątku głównego.
+
+### 3. packages/sandbox — Izolacja wykonania
+- **SandboxRunner**: efemeryczny kontener Docker per zadanie (`docker run --rm`).
+- **Fallback na host**: gdy Docker niedostępny, uruchamia na hoście z warningiem.
+- **Egress allowlist**: `isDomainAllowed()` + `logBlockedEgress()` — domeny poza listą są blokowane i logowane.
+- **Bash w sandbox**: `AgentRuntime` wykrywa `bash` + `sandbox` i przekierowuje do kontenera.
+- **RAM**: kontener uruchamiany na żądanie, nie trzymany rezydentnie.
+
+### 4. packages/security/hooks — Pre/Post Tool Hooks
+- **HookEngine**: rejestracja hooków per `toolPattern` (regex) i `phase` (pre/post).
+- **PreToolUse**: może deny (zwraca `ToolResult` z `ok: false`).
+- **PostToolUse**: może modyfikować wynik, np. uruchomić testy po edycji.
+- **createTestAfterEditHook()**: wbudowany hook PostToolUse na `edit` → uruchamia `pnpm run test`.
+- **Integracja**: `AgentRuntime` wywołuje `hookEngine.runPreHooks()` przed dispatch i `runPostHooks()` po.
+
+### 5. packages/llm — vLLM Adapter
+- **VllmClient**: extends `OllamaClient` z domyślnym `baseUrl = http://localhost:8000/v1`.
+- OpenAI-compatible API — działa z każdym serwerem vLLM (WSL2 lub natywny).
+
+### 6. Integracja w AgentRuntime
+- **MCP**: `ToolRegistry` akceptuje narzędzia MCP (prefix `serverName_toolName`).
+- **Sandbox**: `bash` tool wykonywany w kontenerze gdy `sandbox` podany w deps.
+- **Hooks**: `HookEngine` podłączony do `executeTool` (pre → deny, post → modify).
+- **Subagent**: `runSubagent` eksportowany z `@lookai/core` (wymaga `DualModelRouter`).
+
+## Bramka weryfikacyjna (smoke test)
+Scenariusz end-to-end: `phase2-smoke.test.ts` weryfikuje:
+- (a) MCP tool discovery + konwersja do LookAI Tool ✅
+- (b) SandboxRunner uruchamia komendy (fallback na host w testach) ✅
+- (c) Egress allowlist blokuje nieautoryzowane domeny ✅
+- (d) HookEngine rejestruje i uruchamia pre/post hooks ✅
+- (e) Subagent function jest eksportowany i typowany ✅
+- (f) MCP tool rejestruje się w ToolRegistry ✅
+- (g) Blocked egress log zapisuje odmowy ✅
+
+## Stan bramek weryfikacyjnych
+| Kryterium | Wynik |
+|---|---|
+| Build | ✅ Czysty |
+| Typecheck | ✅ Czysty |
+| Testy jednostkowe | ✅ 33/33 zielone (11 pakietów) |
+| Lint | ✅ Czysty (3 warningi `any` w OllamaClient, akceptowalne) |
+| Smoke test | ✅ Przechodzi (7 asercji end-to-end) |
+
+## Co NIE zostało zrobione (świadomie odłożone)
+- ❌ Realne podłączenie serwera MCP (np. filesystem, GitHub) — wymaga zewnętrznego serwera MCP do testów integracyjnych
+- ❌ Pełna izolacja Docker w testach (brak Docker Desktop w środowisku testowym — fallback na host)
+- ❌ Web UI (React + Tailwind) — nadal TUI
+- ❌ RAG / wektorowa pamięć
+- ❌ VS Code extension
+- ❌ Orchestrator API + WebSocket
+- ❌ Eval harness
+- ❌ Full JSON Schema → Zod converter (best-effort, wystarczający dla prostych schematów)
+- ❌ Dynamiczne ładowanie hooków z `.lookai/hooks/` (rejestracja programatyczna)
+
+---
+
 # LookAI — Faza 1 (Zakończona)
 
 ## Cel fazy
