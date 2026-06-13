@@ -3,7 +3,8 @@ import type { Message, ToolCall, LLMResponse, ToolResult } from "@lookai/shared"
 import type { DualModelRouter } from "@lookai/llm";
 import type { PermissionEngine } from "@lookai/security";
 import type { PromptAssembler } from "@lookai/context";
-import type { MemoryStore } from "@lookai/memory";
+import type { HookEngine } from "@lookai/security";
+import type { SandboxRunner } from "@lookai/sandbox";
 import type { RuntimeConfig, TurnHandler, UsageTracker } from "./types.js";
 import type { SessionMode } from "./modes.js";
 import { ASSISTANT_SYSTEM_PROMPT, CODING_SYSTEM_PROMPT } from "./modes.js";
@@ -39,20 +40,22 @@ export class AgentRuntime {
   private readFiles = new Map<string, number>(); // path -> mtimeMs at read time
   private permissionEngine?: PermissionEngine;
   private promptAssembler?: PromptAssembler;
-  private memoryStore?: MemoryStore;
+  private hookEngine?: HookEngine;
+  private sandbox?: SandboxRunner;
 
   constructor(
     router: DualModelRouter,
     registry: ToolRegistry,
     config: RuntimeConfig,
-    deps?: { permissionEngine?: PermissionEngine; promptAssembler?: PromptAssembler; memoryStore?: MemoryStore; mode?: SessionMode }
+    deps?: { permissionEngine?: PermissionEngine; promptAssembler?: PromptAssembler; memoryStore?: MemoryStore; mode?: SessionMode; hookEngine?: HookEngine; sandbox?: SandboxRunner }
   ) {
     this.router = router;
     this.registry = registry;
     this.config = { ...config, maxTurns: config.maxTurns ?? 25 };
     this.permissionEngine = deps?.permissionEngine;
     this.promptAssembler = deps?.promptAssembler;
-    this.memoryStore = deps?.memoryStore;
+    this.hookEngine = deps?.hookEngine;
+    this.sandbox = deps?.sandbox;
     this.mode = deps?.mode ?? "coding" as SessionMode;
   }
 
@@ -242,7 +245,28 @@ export class AgentRuntime {
         this.readFiles.set(path, 0);
       }
     }
-    return this.registry.dispatch(tc.name, tc.arguments);
+    // Pre-tool hooks
+    if (this.hookEngine) {
+      const hookResult = await this.hookEngine.runPreHooks(tc, process.cwd());
+      if (hookResult && !hookResult.ok) {
+        return hookResult;
+      }
+    }
+
+    // Sandbox: run bash inside container if available
+    if (tc.name === "bash" && this.sandbox) {
+      const command = String(tc.arguments?.command ?? "");
+      return this.sandbox.run(command);
+    }
+
+    const result = await this.registry.dispatch(tc.name, tc.arguments);
+
+    // Post-tool hooks
+    if (this.hookEngine) {
+      return await this.hookEngine.runPostHooks(tc, result, process.cwd());
+    }
+
+    return result;
   }
 
   private saveSession(): void {
