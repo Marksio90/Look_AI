@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 import { DiffProvider } from './diffProvider';
+import { LookaiLspProvider } from './lspProvider';
 
 let diffProvider: DiffProvider | undefined;
+let lspProvider: LookaiLspProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   diffProvider = new DiffProvider();
+  lspProvider = new LookaiLspProvider();
 
   const startChat = vscode.commands.registerCommand('lookai.startChat', () => {
     const panel = vscode.window.createWebviewPanel(
@@ -24,11 +27,20 @@ export function activate(context: vscode.ExtensionContext) {
     diffProvider?.rejectCurrentDiff();
   });
 
-  context.subscriptions.push(startChat, acceptDiff, rejectDiff);
+  const onChange = vscode.workspace.onDidChangeTextDocument((e) => {
+    lspProvider?.analyzeDocument(e.document);
+  });
+
+  const onOpen = vscode.workspace.onDidOpenTextDocument((doc) => {
+    lspProvider?.analyzeDocument(doc);
+  });
+
+  context.subscriptions.push(startChat, acceptDiff, rejectDiff, onChange, onOpen);
 }
 
 export function deactivate() {
   diffProvider?.dispose();
+  lspProvider?.dispose();
 }
 
 function getChatWebviewContent(): string {
