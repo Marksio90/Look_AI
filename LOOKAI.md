@@ -40,7 +40,7 @@ Implementacja: web UI (React + Tailwind, zgodne z re-mockiem), rozszerzenie VS C
 
 ### 5. docs/LOCAL_CEILING.md — Sufit lokalny
 - **Wąskie gardła**: VRAM 8 GB (główne), RAM 32 GB (wtórne).
-- **Modele**: Worker 7B Q4_K_M = 5–6 GB VRAM rezydentnie; Mózg 35B Q4_K_M = ~20 GB RAM (CPU offload).
+- **Modele**: Worker 7B Q4_K_M = 5–6 GB VRAM rezydentnie; Mózg 30B Q4_K_M = ~20 GB RAM (CPU offload).
 - **Limity kontekstu**: Worker 4K tokens, Mózg 2K tokens.
 - **Przepustowość**: Worker ~40–60 tok/s (GPU), Mózg ~5–15 tok/s (CPU).
 - **Rekomendacje operacyjne**: małe konteksty, jedno narzędzie na turę, Mózg na żądanie, brak przeglądarki przy Mózgu, lekki RAG, lekka observability.
@@ -284,7 +284,7 @@ Rozbudowa Fazy 0 o: nowe narzędzia (Glob, Grep), system uprawnień, zarządzani
 - **listSessions()**: lista sesji z sortowaniem po czasie.
 
 ### 5. packages/core + packages/llm — routing dual-model
-- **DualModelRouter**: zarządza Workerem (`qwen2.5-coder:7b`, rezydentny) i Mózgiem (`qwen3.6-35b-a3b`, ładowany na żądanie).
+- **DualModelRouter**: zarządza Workerem (`qwen2.5-coder:7b`, rezydentny) i Mózgiem (`qwen3:30b-a3b`, ładowany na żądanie).
 - **Routing**: tury planowania (pierwsza i co 5-ta) → Mózg; tury narzędziowe → Worker.
 - **Eskalacja**: 2× wadliwy tool-use u Workera → reset licznika, komunikat o eskalacji (Mózg w kolejnej turze).
 - **AgentRuntime** zintegrowany z `PermissionEngine`, `PromptAssembler`, `MemoryStore`.
