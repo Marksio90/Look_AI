@@ -42,8 +42,8 @@ describe("BashSession", () => {
   it("runs a command", async () => {
     const s = new BashSession(".");
     const r = await s.run("echo hello");
-    expect(r.ok).toBe(true);
-    expect(r.content).toBe("hello");
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("hello");
   });
 });
 

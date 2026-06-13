@@ -56,6 +56,24 @@ export class AgentRuntime {
     this.mode = deps?.mode ?? "coding" as SessionMode;
   }
 
+  getContextBudget(): { tokens: number; percentage: number; shouldCompact: boolean } | null {
+    if (!this.promptAssembler) return null;
+    const budget = this.promptAssembler.estimateBudget(this.messages);
+    return {
+      tokens: budget.totalTokens,
+      percentage: budget.percentage,
+      shouldCompact: this.promptAssembler.shouldCompact(budget),
+    };
+  }
+
+  forceCompact(): boolean {
+    if (!this.promptAssembler) return false;
+    const budget = this.promptAssembler.estimateBudget(this.messages);
+    if (!this.promptAssembler.shouldCompact(budget)) return false;
+    this.messages = this.promptAssembler.compact(this.messages);
+    return true;
+  }
+
   getMessages(): readonly Message[] {
     return this.messages;
   }
@@ -64,7 +82,7 @@ export class AgentRuntime {
     return { ...this.tracker };
   }
 
-  async run(userPrompt: string, onTurn?: TurnHandler): Promise<{ done: boolean; reason: string }> {
+  async run(userPrompt: string, opts?: { resume?: boolean; sessionId?: string; onTurn?: TurnHandler }): Promise<{ done: boolean; reason: string }> {
     this.messages = [];
     this.tracker = { totalTokens: 0, totalPromptTokens: 0, totalCompletionTokens: 0, turns: 0 };
     this.readFiles.clear();
@@ -73,12 +91,19 @@ export class AgentRuntime {
     this.messages.push(makeSystemMessage(systemPrompt));
     this.messages.push(makeUserMessage(userPrompt));
 
-    // Load previous session if --resume
+    // Load previous session if --resume or specific sessionId
     if (this.memoryStore) {
-      const latest = this.memoryStore.getLatestSessionId();
-      if (latest && this.memoryStore.loadSession(latest)) {
-        const prev = this.memoryStore.loadSession(latest)!;
-        this.messages = [...prev, ...this.messages];
+      let sessionId: string | null = null;
+      if (opts?.sessionId) {
+        sessionId = opts.sessionId;
+      } else if (opts?.resume) {
+        sessionId = this.memoryStore.getLatestSessionId();
+      }
+      if (sessionId) {
+        const prev = this.memoryStore.loadSession(sessionId);
+        if (prev && prev.length > 0) {
+          this.messages = [...prev, ...this.messages];
+        }
       }
     }
 
@@ -90,7 +115,7 @@ export class AgentRuntime {
         const budget = this.promptAssembler.estimateBudget(this.messages);
         if (this.promptAssembler.shouldCompact(budget)) {
           this.messages = this.promptAssembler.compact(this.messages);
-          await onTurn?.({ type: "text", text: "[Context compacted]", usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
+          await opts?.onTurn?.({ type: "text", text: "[Context compacted]", usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
         }
       }
 
@@ -112,49 +137,49 @@ export class AgentRuntime {
       this.messages.push(makeAssistantMessage(response));
 
       if (response.text) {
-        await onTurn?.({ type: "text", text: response.text, usage: response.usage, model: response.model });
+        await opts?.onTurn?.({ type: "text", text: response.text, usage: response.usage, model: response.model });
       }
 
       // Fallback: parse JSON tool call from text for local models
       if (response.text && (response.stopReason === "end_turn" || response.stopReason === "tool_use")) {
         const parsed = this.tryParseToolCall(response.text);
         if (parsed) {
-          await onTurn?.({ type: "tool_call", toolCall: parsed, usage: response.usage, model: response.model });
-          const result = await this.executeTool(parsed, onTurn);
-          await onTurn?.({ type: "tool_result", toolResult: { ...result, toolCallId: parsed.id, toolName: parsed.name }, usage: response.usage, model: response.model });
+          await opts?.onTurn?.({ type: "tool_call", toolCall: parsed, usage: response.usage, model: response.model });
+          const result = await this.executeTool(parsed, opts?.onTurn);
+          await opts?.onTurn?.({ type: "tool_result", toolResult: { ...result, toolCallId: parsed.id, toolName: parsed.name }, usage: response.usage, model: response.model });
           this.messages.push(makeToolResultMessage(parsed, result));
           continue;
         }
       }
 
       if (response.stopReason === "end_turn") {
-        await onTurn?.({ type: "done", usage: response.usage, model: response.model });
+        await opts?.onTurn?.({ type: "done", usage: response.usage, model: response.model });
         this.saveSession();
         return { done: true, reason: "end_turn" };
       }
 
       if (response.stopReason === "max_tokens") {
-        await onTurn?.({ type: "error", error: "max_tokens reached", usage: response.usage, model: response.model });
+        await opts?.onTurn?.({ type: "error", error: "max_tokens reached", usage: response.usage, model: response.model });
         return { done: false, reason: "max_tokens" };
       }
 
       if (response.stopReason === "error") {
-        await onTurn?.({ type: "error", error: "LLM error", usage: response.usage, model: response.model });
+        await opts?.onTurn?.({ type: "error", error: "LLM error", usage: response.usage, model: response.model });
         return { done: false, reason: "llm_error" };
       }
 
       if (response.stopReason === "tool_use") {
         if (response.toolCalls.length === 0) {
-          await onTurn?.({ type: "error", error: "stopReason=tool_use but no tool calls", usage: response.usage, model: response.model });
+          await opts?.onTurn?.({ type: "error", error: "stopReason=tool_use but no tool calls", usage: response.usage, model: response.model });
           this.router.recordToolUseBad();
           return { done: false, reason: "empty_tool_calls" };
         }
         // Only one tool per turn
         const tc = response.toolCalls[0];
-        await onTurn?.({ type: "tool_call", toolCall: tc, usage: response.usage, model: response.model });
+        await opts?.onTurn?.({ type: "tool_call", toolCall: tc, usage: response.usage, model: response.model });
 
-        const result = await this.executeTool(tc, onTurn);
-        await onTurn?.({ type: "tool_result", toolResult: { ...result, toolCallId: tc.id, toolName: tc.name }, usage: response.usage, model: response.model });
+        const result = await this.executeTool(tc, opts?.onTurn);
+        await opts?.onTurn?.({ type: "tool_result", toolResult: { ...result, toolCallId: tc.id, toolName: tc.name }, usage: response.usage, model: response.model });
         this.messages.push(makeToolResultMessage(tc, result));
 
         if (result.ok) {
@@ -165,7 +190,7 @@ export class AgentRuntime {
 
         // Escalation: 2 bad tool uses → switch to Brain for next turn
         if (this.router.shouldEscalate()) {
-          await onTurn?.({ type: "text", text: "[Escalating to Brain model due to repeated tool errors]", usage: response.usage, model: response.model });
+          await opts?.onTurn?.({ type: "text", text: "[Escalating to Brain model due to repeated tool errors]", usage: response.usage, model: response.model });
           this.router.resetEscalation();
         }
 
@@ -173,7 +198,7 @@ export class AgentRuntime {
       }
     }
 
-    await onTurn?.({ type: "error", error: `maxTurns (${this.config.maxTurns}) reached` });
+    await opts?.onTurn?.({ type: "error", error: `maxTurns (${this.config.maxTurns}) reached` });
     return { done: false, reason: "max_turns" };
   }
 

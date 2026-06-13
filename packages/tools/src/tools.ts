@@ -93,80 +93,162 @@ export class BashSession {
 
   constructor(cwd: string, env: Record<string, string> = {}) {
     this.cwd = cwd;
-    this.env = { ...process.env, ...env } as Record<string, string>;
+    this.env = env;
   }
 
-  async run(command: string): Promise<ToolResult> {
+  run(command: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     return new Promise((resolve) => {
-      const child = spawn("bash", ["-c", command], {
-        cwd: this.cwd,
-        env: this.env,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      this.child = child;
+      this.child = spawn(command, { shell: true, cwd: this.cwd, env: { ...process.env, ...this.env } });
       let stdout = "";
       let stderr = "";
-      child.stdout.on("data", (d) => { stdout += d; });
-      child.stderr.on("data", (d) => { stderr += d; });
-      child.on("close", (code) => {
-        this.child = null;
-        const out = stdout.trim();
-        const err = stderr.trim();
-        if (code === 0) {
-          resolve({ ok: true, content: out || "(no output)" });
-        } else {
-          resolve({ ok: false, error: `Exit ${code}: ${err || out || "(no output)"}` });
-        }
-      });
-      child.on("error", (e) => {
-        this.child = null;
-        resolve({ ok: false, error: `Spawn error: ${e.message}` });
+      this.child.stdout.on("data", (data) => { stdout += String(data); });
+      this.child.stderr.on("data", (data) => { stderr += String(data); });
+      this.child.on("close", (code) => {
+        resolve({ stdout: stdout.slice(0, 5000), stderr: stderr.slice(0, 2000), exitCode: code ?? 0 });
       });
     });
   }
 
   kill(): void {
-    if (this.child && !this.child.killed) {
-      this.child.kill("SIGTERM");
-    }
+    this.child?.kill();
   }
 }
 
 export const BashToolFactory = (session: BashSession): Tool => ({
   name: "bash",
-  description: "Run a bash command in a persistent session (cwd and env persist).",
+  description: "Run a bash command in a persistent session. Output is truncated to 5000 chars.",
   parameters: z.object({
-    command: z.string().describe("Command to run"),
+    command: z.string().describe("Shell command to run"),
   }),
-  execute(args): Promise<ToolResult> | ToolResult {
-    return session.run(String(args.command ?? ""));
+  async execute(args): Promise<ToolResult> {
+    const command = String(args.command ?? "");
+    try {
+      const result = await session.run(command);
+      const lines = [
+        `Exit code: ${result.exitCode}`,
+        result.stdout ? `stdout:\n${result.stdout}` : "",
+        result.stderr ? `stderr:\n${result.stderr}` : "",
+      ].filter(Boolean).join("\n");
+      return { ok: result.exitCode === 0, content: lines };
+    } catch (e) {
+      return { ok: false, error: `Bash error: ${e instanceof Error ? e.message : String(e)}` };
+    }
   },
 });
 
 export const GlobTool: Tool = {
   name: "glob",
-  description: "Find files matching a pattern. Returns up to 100 files sorted by modification time (newest first).",
+  description: "Find files matching a pattern. Supports * and **. Returns up to 100 results sorted by recency.",
   parameters: z.object({
-    pattern: z.string().describe("Glob pattern, e.g. '*.ts' or 'src/**/*.js'"),
-    cwd: z.string().optional().describe("Working directory for the search"),
+    pattern: z.string().describe("Glob pattern, e.g. 'src/**/*.ts'"),
+    cwd: z.string().optional().describe("Working directory (default: current)"),
   }),
   execute(args): ToolResult {
     const pattern = String(args.pattern ?? "");
-    const cwd = String(args.cwd ?? ".");
+    const cwd = String(args.cwd ?? process.cwd());
     try {
       const results = globSync(pattern, cwd, GLOB_LIMIT);
-      if (results.length === 0) {
-        return { ok: true, content: "No files found." };
-      }
-      return { ok: true, content: results.join("\n") };
+      return { ok: true, content: results.join("\n") || "No matches." };
     } catch (e) {
       return { ok: false, error: `Glob error: ${e instanceof Error ? e.message : String(e)}` };
     }
   },
 };
 
+export const GrepTool: Tool = {
+  name: "grep",
+  description: "Search file contents for a regex pattern. Returns matching lines with file paths and line numbers.",
+  parameters: z.object({
+    pattern: z.string().describe("Regex pattern to search for"),
+    path: z.string().optional().describe("File or directory to search in (default: current directory)"),
+    include: z.string().optional().describe("File extension filter, e.g. '*.ts'"),
+  }),
+  execute(args): ToolResult {
+    const pattern = String(args.pattern ?? "");
+    const target = String(args.path ?? process.cwd());
+    const include = args.include ? String(args.include) : null;
+    try {
+      const regex = new RegExp(pattern, "g");
+      const results: string[] = [];
+      if (existsSync(target) && statSync(target).isFile()) {
+        grepFile(target, regex, results);
+      } else if (existsSync(target) && statSync(target).isDirectory()) {
+        grepDir(target, regex, include, results);
+      } else {
+        return { ok: false, error: `Path not found: ${target}` };
+      }
+      return { ok: true, content: results.slice(0, 200).join("\n") || "No matches." };
+    } catch (e) {
+      return { ok: false, error: `Grep error: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  },
+};
+
+export const IngestTool: Tool = {
+  name: "ingest",
+  description: "Ingest a file into context. Supports .txt, .md, .json, .csv, .tsv. Converts CSV to markdown table. For large files, returns first 200 lines with size info.",
+  parameters: z.object({
+    path: z.string().describe("Path to file to ingest"),
+  }),
+  execute(args): ToolResult {
+    const path = String(args.path ?? "");
+    try {
+      if (!existsSync(path)) {
+        return { ok: false, error: `File not found: ${path}` };
+      }
+      const s = statSync(path);
+      if (!s.isFile()) {
+        return { ok: false, error: `Not a file: ${path}` };
+      }
+
+      const ext = path.split(".").pop()?.toLowerCase() ?? "";
+      const raw = readFileSync(path, "utf-8");
+      const lines = raw.split("\n");
+      const sizeKb = Math.round(s.size / 1024);
+
+      // CSV/TSV → markdown table
+      if (ext === "csv" || ext === "tsv") {
+        const delimiter = ext === "csv" ? "," : "\t";
+        const rows = lines.map((l) => l.split(delimiter).map((c) => c.trim()));
+        if (rows.length === 0) {
+          return { ok: true, content: "Empty file." };
+        }
+        const headers = rows[0];
+        const body = rows.slice(1, 201); // max 200 data rows
+        const md = [
+          "| " + headers.join(" | ") + " |",
+          "| " + headers.map(() => "---").join(" | ") + " |",
+          ...body.map((r) => "| " + r.join(" | ") + " |"),
+        ].join("\n");
+        const truncated = rows.length > 201;
+        return {
+          ok: true,
+          content: `Ingested ${path} (${sizeKb} KB, ${rows.length} rows)\n\n${md}${truncated ? "\n\n... (truncated to 200 rows)" : ""}`,
+        };
+      }
+
+      // Text files: txt, md, json, and unknown
+      const supported = ["txt", "md", "json", "js", "ts", "tsx", "jsx", "py", "rs", "go", "java", "c", "cpp", "h", "yaml", "yml", "toml", "xml", "html", "css", "scss", "sql", "sh", "bash", "ps1", "log"];
+      if (!supported.includes(ext)) {
+        return {
+          ok: false,
+          error: `Unsupported file type: .${ext}. Supported: ${supported.join(", ")}. For PDF/DOCX, convert to text first.`,
+        };
+      }
+
+      const head = lines.slice(0, MAX_READ_LINES).join("\n");
+      const truncated = lines.length > MAX_READ_LINES;
+      return {
+        ok: true,
+        content: `Ingested ${path} (${sizeKb} KB, ${lines.length} lines)\n\n${head}${truncated ? `\n\n... (${lines.length - MAX_READ_LINES} more lines)` : ""}`,
+      };
+    } catch (e) {
+      return { ok: false, error: `Ingest error: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  },
+};
+
 function globSync(pattern: string, cwd: string, limit: number): string[] {
-  // Simple glob: supports * and **
   const parts = pattern.split("/");
   const results: Array<{ path: string; mtime: number }> = [];
   walk(cwd, parts, 0, cwd, results, limit);
@@ -184,64 +266,28 @@ function walk(base: string, parts: string[], idx: number, current: string, resul
   }
   const part = parts[idx];
   if (part === "**") {
-    // Match any depth
     walk(base, parts, idx + 1, current, results, limit);
     if (existsSync(current) && statSync(current).isDirectory()) {
-      for (const child of readdirSync(current)) {
-        walk(base, parts, idx, join(current, child), results, limit);
+      for (const entry of readdirSync(current)) {
+        walk(base, parts, idx, join(current, entry), results, limit);
       }
     }
-  } else if (part.includes("*")) {
-    const regex = new RegExp("^" + part.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+  } else if (part === "*") {
     if (existsSync(current) && statSync(current).isDirectory()) {
-      for (const child of readdirSync(current)) {
-        if (regex.test(child)) {
-          walk(base, parts, idx + 1, join(current, child), results, limit);
-        }
+      for (const entry of readdirSync(current)) {
+        walk(base, parts, idx + 1, join(current, entry), results, limit);
       }
     }
   } else {
-    const next = join(current, part);
-    walk(base, parts, idx + 1, next, results, limit);
+    walk(base, parts, idx + 1, join(current, part), results, limit);
   }
 }
-
-export const GrepTool: Tool = {
-  name: "grep",
-  description: "Search file contents for a pattern (regex). Returns matching lines with file paths and line numbers.",
-  parameters: z.object({
-    pattern: z.string().describe("Regex pattern to search for"),
-    path: z.string().optional().describe("File or directory to search; defaults to current directory"),
-    include: z.string().optional().describe("Glob pattern for files to include, e.g. '*.ts'"),
-  }),
-  execute(args): ToolResult {
-    const pattern = String(args.pattern ?? "");
-    const target = String(args.path ?? ".");
-    const include = args.include ? String(args.include) : null;
-    try {
-      const regex = new RegExp(pattern);
-      const results: string[] = [];
-      if (existsSync(target) && statSync(target).isFile()) {
-        grepFile(target, regex, results);
-      } else if (existsSync(target) && statSync(target).isDirectory()) {
-        grepDir(target, regex, include, results);
-      } else {
-        return { ok: false, error: `Path not found: ${target}` };
-      }
-      if (results.length === 0) {
-        return { ok: true, content: "No matches found." };
-      }
-      return { ok: true, content: results.join("\n") };
-    } catch (e) {
-      return { ok: false, error: `Grep error: ${e instanceof Error ? e.message : String(e)}` };
-    }
-  },
-};
 
 function grepFile(path: string, regex: RegExp, results: string[]): void {
   const raw = readFileSync(path, "utf-8");
   const lines = raw.split("\n");
   for (let i = 0; i < lines.length; i++) {
+    regex.lastIndex = 0;
     if (regex.test(lines[i])) {
       results.push(`${path}:${i + 1}: ${lines[i].trim()}`);
     }

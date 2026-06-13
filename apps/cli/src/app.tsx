@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Box, Text, useInput, useApp } from "ink";
 import { AgentRuntime } from "@lookai/core";
 import { OllamaClient, DualModelRouter } from "@lookai/llm";
-import { ToolRegistry, ReadTool, WriteTool, EditTool, BashToolFactory, BashSession, GlobTool, GrepTool } from "@lookai/tools";
+import { ToolRegistry, ReadTool, WriteTool, EditTool, BashToolFactory, BashSession, GlobTool, GrepTool, IngestTool } from "@lookai/tools";
+import { MemoryToolFactory } from "./memory-tool.js";
 import { PermissionEngine, PermissionMode } from "@lookai/security";
 import { PromptAssembler } from "@lookai/context";
 import { MemoryStore } from "@lookai/memory";
@@ -16,8 +17,7 @@ const CODING_SYSTEM_PROMPT = `You are LookAI, a local coding assistant. You have
 - bash(command) — run a bash command in a persistent session.
 - glob(pattern, cwd?) — find files matching a pattern.
 - grep(pattern, path?, include?) — search file contents for a regex pattern.
-- web_search(query, limit?) — search the web for information.
-- web_fetch(url) — fetch a webpage and extract content as markdown.
+- ingest(path) — ingest a file (.txt, .md, .json, .csv, .tsv) into context. CSV converts to markdown table.
 
 Rules:
 1. One tool per turn.
@@ -38,6 +38,11 @@ Rules:
 3. Use web_search and web_fetch for research and fact-checking.
 4. Be concise and helpful.`;
 
+interface AppProps {
+  memoryEnabled?: boolean;
+  resumeMode?: boolean;
+  continueMode?: boolean;
+}
 interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "tool" | "system";
@@ -48,14 +53,19 @@ interface ChatMessage {
   permissionRequest?: unknown;
 }
 
-export default function App() {
+export default function App({ memoryEnabled = false, resumeMode = false, continueMode = false }: AppProps) {
   const { exit } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Worker ready | Context: 0% | Turns: 0 | $0.00");
   const [showRail, setShowRail] = useState(false);
   const [running, setRunning] = useState(false);
+  const [memoryOn, setMemoryOn] = useState(memoryEnabled);
   const [mode, setMode] = useState<SessionMode>("coding");
+  const [resumeOn, setResumeOn] = useState(resumeMode);
+  const [showSessionSelect, setShowSessionSelect] = useState(continueMode);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [sessionList, setSessionList] = useState<Array<{ id: string; updatedAt: number; messageCount: number }>>([]);
 
   const baseUrl = process.env.LOOKAI_OLLAMA_URL ?? "http://localhost:11434/v1";
   const workerModel = process.env.LOOKAI_WORKER_MODEL ?? "qwen2.5-coder:7b";
@@ -73,6 +83,7 @@ export default function App() {
   registry.register(GrepTool);
   const bashSession = new BashSession(process.cwd());
   registry.register(BashToolFactory(bashSession));
+  registry.register(IngestTool);
 
   // Web tools
   const searchAdapter = new SearxngAdapter(process.env.LOOKAI_SEARXNG_URL ?? "http://localhost:8080");
@@ -83,6 +94,16 @@ export default function App() {
   const promptAssembler = new PromptAssembler({ systemPrompt: CODING_SYSTEM_PROMPT, maxContextTokens: 8192, preserveLastNTurns: 4 });
   const memoryStore = new MemoryStore();
 
+  // Memory tool (opt-in)
+  if (memoryOn) {
+    registry.register(MemoryToolFactory(memoryStore));
+  }
+
+  useEffect(() => {
+    if (continueMode) {
+      setSessionList(memoryStore.listSessions());
+    }
+  }, [continueMode]);
   const systemPrompt = mode === "assistant" ? ASSISTANT_SYSTEM_PROMPT : CODING_SYSTEM_PROMPT;
   const runtime = new AgentRuntime(router, registry, { maxTurns: 25, systemPrompt, mode }, {
     permissionEngine,
@@ -99,10 +120,31 @@ export default function App() {
     if (!input.trim() || running) return;
     const userText = input.trim();
     setInput("");
+
+    // Slash commands
+    if (userText === "/context") {
+      const budget = runtime.getContextBudget();
+      if (budget) {
+        addMessage({ id: `sys-${Date.now()}`, role: "system", text: `Context: ${budget.tokens} tokens (${budget.percentage.toFixed(1)}%). ${budget.shouldCompact ? "Compaction recommended." : "Within budget."}` });
+      } else {
+        addMessage({ id: `sys-${Date.now()}`, role: "system", text: "Context tracking not available." });
+      }
+      return;
+    }
+    if (userText === "/compact") {
+      const didCompact = runtime.forceCompact();
+      addMessage({ id: `sys-${Date.now()}`, role: "system", text: didCompact ? "Context compacted." : "Context within budget, no compaction needed." });
+      return;
+    }
+    if (userText === "/clear") {
+      setMessages([]);
+      return;
+    }
+
     setRunning(true);
     addMessage({ id: `u-${Date.now()}`, role: "user", text: userText });
 
-    await runtime.run(userText, async (event: TurnEvent) => {
+    await runtime.run(userText, { resume: resumeOn, onTurn: async (event: TurnEvent) => {
       const id = `a-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
       if (event.type === "text") {
         addMessage({ id, role: "assistant", text: event.text ?? "", model: event.model });
@@ -120,7 +162,7 @@ export default function App() {
       const usage = runtime.getUsage();
       const modelLabel = event.model ?? "worker";
       setStatus(`${mode === "assistant" ? "Assistant" : modelLabel === brainModel ? "Brain" : "Worker"} | Context: ${usage.totalTokens} tokens | Turns: ${usage.turns} | $0.00`);
-    });
+    }});
 
     setRunning(false);
   }, [input, running, addMessage, runtime, brainModel, mode]);
@@ -132,6 +174,8 @@ export default function App() {
       setShowRail((s) => !s);
     } else if (key.tab) {
       setMode((m) => (m === "coding" ? "assistant" : "coding"));
+    } else if (input === "m" || input === "M") {
+      setMemoryOn((m) => !m);
     } else if (key.ctrl) {
       exit();
     } else if (input) {
@@ -147,7 +191,8 @@ export default function App() {
         <Text bold color="terrakota">LookAI</Text>
         <Text> </Text>
         <Text color={mode === "assistant" ? "cyan" : "yellow"}>[{mode === "assistant" ? "Assistant" : "Coding"}]</Text>
-        <Text dimColor> Tab to switch</Text>
+        <Text color={memoryOn ? "magenta" : "gray"}>[{memoryOn ? "Mem" : "no-Mem"}]</Text>
+        <Text dimColor> M=memory</Text>
       </Box>
       <Box flexDirection="row" flexGrow={1}>
         {showRail && (
