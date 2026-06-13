@@ -179,7 +179,7 @@ function jsonSchemaToZod(schema: unknown): z.ZodTypeAny {
     if (values.every((v) => typeof v === "string")) {
       return z.enum(values as [string, ...string[]]);
     }
-    return z.union(values.map((v) => z.literal(v)) as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
+    return z.union(values.map((v) => z.literal(v as string | number | boolean)) as unknown as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }
 
   // Handle const
@@ -208,11 +208,11 @@ function jsonSchemaToZod(schema: unknown): z.ZodTypeAny {
       const isRequired = required.includes(key);
       shape[key] = isRequired ? jsonSchemaToZod(prop) : jsonSchemaToZod(prop).optional();
     }
-    let obj = z.object(shape);
+    let obj: z.ZodTypeAny = z.object(shape);
     if (s.additionalProperties === true) {
-      obj = obj.catchall(z.any());
+      obj = z.object(shape).passthrough();
     } else if (s.additionalProperties === false) {
-      obj = obj.strict();
+      obj = z.object(shape).strict();
     }
     return obj;
   }

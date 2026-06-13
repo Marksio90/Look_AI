@@ -14,14 +14,15 @@ export interface ComputerObservation {
   error?: string;
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export class ComputerUse {
-  private browser?: import('playwright').Browser;
-  private page?: import('playwright').Page;
+  private browser?: any;
+  private page?: any;
 
   async start(): Promise<void> {
     try {
-      const { chromium } = await import('playwright');
-      this.browser = await chromium.launch({ headless: true });
+      const pw = await new Function('return import("playwright")')() as any;
+      this.browser = await pw.chromium.launch({ headless: true });
       this.page = await this.browser.newPage();
     } catch (err) {
       throw new Error(`Playwright not available: ${(err as Error).message}. Install with: npm install -g playwright && npx playwright install chromium`);
@@ -47,14 +48,15 @@ export class ComputerUse {
           }
           return {};
         case 'keypress':
-          if (action.text) await this.page.keyboard.press(action.text as import('playwright').KeyboardPressOptions);
+          if (action.text) await this.page.keyboard.press(action.text);
           return {};
         case 'scroll':
-          await this.page.evaluate(() => window.scrollBy(0, 300));
+          await this.page.evaluate(() => (globalThis as any).scrollBy(0, 300));
           return {};
-        case 'screenshot':
+        case 'screenshot': {
           const screenshot = await this.page.screenshot({ encoding: 'base64' });
           return { screenshot: screenshot as string, url: this.page.url() };
+        }
         default:
           return { error: `Unknown action: ${action.action}` };
       }
@@ -69,6 +71,7 @@ export class ComputerUse {
     this.page = undefined;
   }
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const ComputerActionSchema = z.object({
   action: z.enum(['click', 'type', 'navigate', 'screenshot', 'scroll', 'keypress']),

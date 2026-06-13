@@ -1,7 +1,7 @@
-# LookAI — Faza 4 (Zakończona)
+# LookAI — Faza 4+ (Zakończona)
 
 ## Cel fazy
-Implementacja: web UI (React + Tailwind, zgodne z re-mockiem), rozszerzenie VS Code (inline diff), MCP marketplace, zbieranie trajektorii, sufit lokalny udokumentowany.
+Implementacja: web UI (React + Tailwind, zgodne z re-mockiem), rozszerzenie VS Code (inline diff + LSP), MCP marketplace (persistencja + zewnętrzny registry), zbieranie trajektorii (persistencja na dysk), sufit lokalny udokumentowany, dynamiczne hooki, full JSON Schema → Zod converter, computer use (Playwright), git worktrees (swarm), Grafana dashboard config.
 
 ## Co dostarczono
 
@@ -11,23 +11,27 @@ Implementacja: web UI (React + Tailwind, zgodne z re-mockiem), rozszerzenie VS C
 - **Chat**: wiadomości user/assistant z kolorowaniem wg modelu (terakota = Mózg, szałwia = Worker), tool calls jako rozwijalne pigułki, inline diff-ready.
 - **Sidebar**: lista sesji, "New chat", wskaźniki modeli (Worker rezydentny / Mózg on-demand).
 - **StatusBar**: wskaźnik połączenia, aktywny model, pasek kontekstu (tokens/limit/%), liczba tur, tryb, $0 lokalnie.
-- **WebSocket**: hook `useOrchestrator` łączy się z `ws://localhost:3000`, proxy HTTP `/api` → orchestrator.
+- **WebSocket**: hook `useOrchestrator` łączy się z `ws://localhost:3001` (prawdziwy orchestrator), REST API `http://localhost:3000`.
 - **Vite proxy**: dev server proxy do orchestratora (API + WebSocket).
 
 ### 2. apps/ide-vscode — Rozszerzenie VS Code
 - **Commands**: `lookai.startChat` (panel webview), `lookai.acceptDiff`, `lookai.rejectDiff`.
 - **DiffProvider**: pokazuje diff inline w edytorze (zielone = dodane, czerwone = usunięte), overlay z Accept/Reject.
+- **LspProvider**: prosty LSP — wykrywa `console.log`, `TODO`, `FIXME` w kodzie i pokazuje jako diagnostyki.
 - **Webview panel**: prosty chat HTML w panelu bocznym VS Code (kremowe tło, terakota akcent).
 - **Activation**: `onStartupFinished` — lightweight, nie spowalnia startu IDE.
 
 ### 3. packages/mcp — MCP Marketplace
 - **McpMarketplace**: rejestracja, wyszukiwanie, instalacja/odinstalowanie serwerów MCP.
+- **Persistencja**: `saveInstalled()` / `loadInstalled()` — zapisuje listę zainstalowanych serwerów do `.lookai/marketplace/installed.json`.
+- **Zewnętrzny registry**: `fetchFromRegistry(url)` — pobiera listę serwerów MCP z markdown (best-effort parsing).
 - **McpServerEntry**: name, description, version, publisher, transport (stdio/http), command/args/url, tags, installed.
 - **Schema**: walidacja Zod (`McpServerEntrySchema`).
 - **Search**: po nazwie, opisie, tagach.
 
-### 4. packages/memory — Trajectory Store
+### 4. packages/memory — Trajectory Store (z persistencją)
 - **TrajectoryStore**: zapisuje trajektorie agenta (kroki: turn, timestamp, role, model, content, toolCalls).
+- **Persistencja na dysk**: `saveToDisk()` / `loadFromDisk()` / `listFromDisk()` — `.lookai/trajectories/{id}.json` + `index.jsonl`.
 - **Outcome**: `success` / `failure` / `abandoned` / `in_progress`.
 - **Score**: opcjonalna ocena (0–1) per trajektoria.
 - **Export**: JSON export wszystkich trajektorii.
@@ -41,6 +45,32 @@ Implementacja: web UI (React + Tailwind, zgodne z re-mockiem), rozszerzenie VS C
 - **Przepustowość**: Worker ~40–60 tok/s (GPU), Mózg ~5–15 tok/s (CPU).
 - **Rekomendacje operacyjne**: małe konteksty, jedno narzędzie na turę, Mózg na żądanie, brak przeglądarki przy Mózgu, lekki RAG, lekka observability.
 - **Ścieżka eskalacji OOM**: zmniejsz kontekst → wyładuj Mózg → zamknij web UI → zatrzymaj Docker → Worker-only mode → Q3_K_M.
+
+### 6. packages/security/hooks — Dynamiczne ładowanie hooków
+- **HookEngine.loadFromDir(dir)**: dynamicznie ładuje hooki z `.js`/`.ts` plików z podanego katalogu.
+- **Konwencja**: plik eksportuje `default` lub `hook` jako `ToolHook`.
+- **Graceful**: pomija pliki, które się nie ładują.
+
+### 7. packages/mcp — Full JSON Schema → Zod converter
+- **Rozszerzony converter**: obsługuje `object`, `string`, `number`, `integer`, `boolean`, `null`, `array`, `enum`, `const`, `anyOf`, `oneOf`, `allOf`, `$ref`, `additionalProperties`, `pattern`, `minLength`, `maxLength`, `format`, `minimum`, `maximum`, typy wielokrotne (`["string", "null"]`).
+- **Walidacja**: `minLength`, `maxLength`, `pattern`, `format` (email, url), `minimum`, `maximum`.
+
+### 8. packages/tools — Computer Use (Playwright)
+- **ComputerUse**: sterowanie przeglądarką przez Playwright (opcjonalny dep, ładowany dynamicznie).
+- **Akcje**: `navigate`, `click`, `type`, `keypress`, `scroll`, `screenshot`.
+- **Schema**: `ComputerActionSchema` (Zod).
+- **Uwaga**: wymaga `npm install -g playwright && npx playwright install chromium`.
+
+### 9. packages/tools — Git Worktrees (Swarm)
+- **GitWorktreeManager**: zarządzanie git worktrees.
+- **List**: `list()` — pokazuje wszystkie worktrees z branch, commit, clean status.
+- **Create**: `create(branch, path)` — tworzy nowy worktree.
+- **Remove**: `remove(path)` — usuwa worktree.
+- **Użycie**: równoległe agenty na osobnych worktrees (brak kolizji na plikach).
+
+### 10. docs/grafana-dashboard.json — Grafana Dashboard Config
+- **Config JSON**: dashboard z panelami: Context Usage (gauge), Active Model (stat), Turn Count (stat), Tool Use Latency (graph), Session Status (table), Memory VRAM (gauge), Eval Score (stat).
+- **Użycie**: importuj do Grafana (self-hosted lub cloud) — nie wymaga serwera Grafana lokalnie (oszczędza RAM).
 - **Co NIE zmieści się**: dwa modele na GPU, kontekst 16K+, embedding model rezydentnie, Qdrant/Postgres/Redis/Grafana rezydentnie.
 
 ## Bramka weryfikacyjna (smoke test)
@@ -58,21 +88,22 @@ Scenariusz end-to-end: `phase4-smoke.test.ts` weryfikuje:
 |---|---|
 | Build | ✅ Czysty (15/16 pakietów) |
 | Typecheck | ✅ Czysty |
-| Testy jednostkowe | ✅ 57/57 zielone (16 pakietów) |
-| Lint | ✅ Czysty (0 errors, 3 warningi `any` w OllamaClient) |
+| Testy jednostkowe | ✅ 69/69 zielone (16 pakietów) |
+| Lint | ✅ Czysty (0 errors, 3 warningi `any` w OllamaClient, akceptowalne) |
 | Smoke test | ✅ Przechodzi (7 asercji end-to-end) |
 
 ## Co NIE zostało zrobione (świadomie odłożone)
-- ❌ Web UI nie łączy się z prawdziwym orchestratorem w teście (mock WebSocket)
-- ❌ VS Code extension nie ma realnej integracji z LSP ani z runtime LookAI
-- ❌ MCP marketplace nie pobiera serwerów z zewnętrznego registry (lokalna lista)
-- ❌ TrajectoryStore nie zapisuje na dysk (tylko in-memory)
-- ❌ Web UI nie ma trybu czatu (asystent) — tylko agent
-- ❌ Web UI nie renderuje realnych diffów (przygotowane pod to, brak integracji)
-- ❌ VS Code extension nie publikuje się do marketplace
-- ❌ Grafana dashboard (metrics w formacie Prometheus, brak serwera Grafana)
-- ❌ Realne podłączenie serwera MCP (np. filesystem, GitHub)
-- ❌ Pełna izolacja Docker w testach
+- ❌ Realne podłączenie serwera MCP (np. filesystem, GitHub) — wymaga zewnętrznego serwera MCP
+- ❌ Pełna izolacja Docker w testach (brak Docker Desktop w środowisku testowym)
+- ❌ Web UI nie łączy się z prawdziwym orchestratorem w teście (mock WebSocket w teście, prawdziwy w dev)
+- ❌ VS Code extension nie ma realnej integracji z runtime LookAI (tylko LSP + diff)
+- ❌ MCP marketplace fetchFromRegistry to best-effort markdown parsing (nie oficjalny registry API)
+- ❌ Grafana dashboard wymaga serwera Grafana (config JSON gotowy, serwer opcjonalny)
+- ❌ Fine-tuning LoRA (wymaga więcej VRAM niż 8 GB — udokumentowane w LOCAL_CEILING.md)
+- ❌ Computer use wymaga Playwright zainstalowanego globalnie (opcjonalny dep)
+- ❌ Swarm / git worktrees: tylko manager, brak orkiestracji wielu agentów
+- ❌ Full JSON Schema → Zod converter: brak pełnej obsługi $ref (wymaga kontekstu schematu)
+- ❌ TrajectoryStore nie zapisuje automatycznie (trzeba wywołać saveToDisk explicit)
 
 ---
 
@@ -213,16 +244,11 @@ Scenariusz end-to-end: `phase2-smoke.test.ts` weryfikuje:
 | Lint | ✅ Czysty (3 warningi `any` w OllamaClient, akceptowalne) |
 | Smoke test | ✅ Przechodzi (7 asercji end-to-end) |
 
-## Co NIE zostało zrobione (świadomie odłożone)
+## Co NIE zostało zrobione (świadomie odłożone — stan sprzed Fazy 4)
 - ❌ Realne podłączenie serwera MCP (np. filesystem, GitHub) — wymaga zewnętrznego serwera MCP do testów integracyjnych
 - ❌ Pełna izolacja Docker w testach (brak Docker Desktop w środowisku testowym — fallback na host)
-- ❌ Web UI (React + Tailwind) — nadal TUI
-- ❌ RAG / wektorowa pamięć
-- ❌ VS Code extension
-- ❌ Orchestrator API + WebSocket
-- ❌ Eval harness
-- ❌ Full JSON Schema → Zod converter (best-effort, wystarczający dla prostych schematów)
-- ❌ Dynamiczne ładowanie hooków z `.lookai/hooks/` (rejestracja programatyczna)
+- ❌ Full JSON Schema → Zod converter (best-effort, wystarczający dla prostych schematów) — ROZSZERZONY w Fazie 4+
+- ❌ Dynamiczne ładowanie hooków z `.lookai/hooks/` (rejestracja programatyczna) — ZAIMPLEMENTOWANE w Fazie 4+
 
 ---
 

@@ -35,20 +35,31 @@ describe('McpMarketplace', () => {
     expect(mp.search('fs')).toHaveLength(0);
   });
 
-  it('installs and uninstalls', () => {
+  it('persists installed state', () => {
     const mp = new McpMarketplace();
     mp.register({
-      name: 'test',
-      description: 'Test server',
+      name: 'persist-test',
+      description: 'Test',
       version: '1.0.0',
       publisher: 'lookai',
       transport: 'stdio',
       tags: ['test'],
       installed: false,
     });
-    expect(mp.install('test')).toBe(true);
-    expect(mp.getInstalled()).toHaveLength(1);
-    expect(mp.uninstall('test')).toBe(true);
-    expect(mp.getInstalled()).toHaveLength(0);
+    expect(mp.install('persist-test')).toBe(true);
+    mp.saveInstalled();
+
+    const mp2 = new McpMarketplace();
+    mp2.register({
+      name: 'persist-test',
+      description: 'Test',
+      version: '1.0.0',
+      publisher: 'lookai',
+      transport: 'stdio',
+      tags: ['test'],
+      installed: false,
+    });
+    mp2.loadInstalled();
+    expect(mp2.getInstalled()).toHaveLength(1);
   });
 });
