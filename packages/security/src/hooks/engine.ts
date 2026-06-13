@@ -1,4 +1,7 @@
 import type { ToolCall, ToolResult } from "@lookai/shared";
+import { readdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export type HookPhase = "pre" | "post";
 
@@ -48,10 +51,22 @@ export class HookEngine {
     return current;
   }
 
-  loadFromDir(dir: string): void {
-    // TODO: dynamic require/import of .js/.ts hook files from dir
-    // For now, hooks are registered programmatically
-    void dir;
+  async loadFromDir(dir: string): Promise<void> {
+    if (!existsSync(dir)) return;
+    const files = readdirSync(dir).filter((f) => f.endsWith('.js') || f.endsWith('.ts'));
+    for (const file of files) {
+      const path = join(dir, file);
+      try {
+        const mod = await import(pathToFileURL(path).href);
+        if (mod.default && typeof mod.default === 'object' && 'phase' in mod.default && 'toolPattern' in mod.default) {
+          this.register(mod.default as ToolHook);
+        } else if (mod.hook && typeof mod.hook === 'object') {
+          this.register(mod.hook as ToolHook);
+        }
+      } catch {
+        // Skip files that fail to load
+      }
+    }
   }
 }
 

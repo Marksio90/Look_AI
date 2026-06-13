@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ChatMessage, Session, OrchestratorStatus } from '../types';
 
-const WS_URL = 'ws://localhost:3000';
+const WS_URL = 'ws://localhost:3001';
+const API_URL = 'http://localhost:3000';
 
 export function useOrchestrator() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -57,7 +58,16 @@ export function useOrchestrator() {
   }, []);
 
   const createSession = useCallback(async () => {
-    const res = await fetch('/api/sessions', { method: 'POST' });
+    const res = await fetch(`${API_URL}/sessions`, { method: 'POST' });
+    if (!res.ok) {
+      // Fallback: create locally if orchestrator doesn't support POST /sessions
+      const id = `session_${Date.now()}`;
+      const session: Session = { id, title: 'New session', messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+      setSessions((prev) => [session, ...prev]);
+      setActiveSessionId(id);
+      setMessages([]);
+      return session;
+    }
     const session = (await res.json()) as Session;
     setSessions((prev) => [session, ...prev]);
     setActiveSessionId(session.id);
