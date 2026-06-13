@@ -3,6 +3,7 @@ import type { ToolCall, ToolResult, Usage } from "@lookai/shared";
 export interface RuntimeConfig {
   maxTurns: number;
   systemPrompt?: string;
+  mode?: "assistant" | "coding";
 }
 
 export interface UsageTracker {

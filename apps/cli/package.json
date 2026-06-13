@@ -21,6 +21,7 @@
     "@lookai/security": "workspace:*",
     "@lookai/context": "workspace:*",
     "@lookai/web": "workspace:*",
+    "@lookai/memory": "workspace:*",
     "ink": "^7.0.6",
     "react": "^19.2.7"
   },

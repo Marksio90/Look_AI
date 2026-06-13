@@ -57,6 +57,9 @@ importers:
       '@lookai/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@lookai/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@lookai/security':
         specifier: workspace:*
         version: link:../../packages/security

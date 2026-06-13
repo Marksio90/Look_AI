@@ -77,7 +77,7 @@ export default function App() {
   // Web tools
   const searchAdapter = new SearxngAdapter(process.env.LOOKAI_SEARXNG_URL ?? "http://localhost:8080");
   registry.register(WebSearchTool(searchAdapter));
-  registry.register(WebFetchTool());
+  registry.register(WebFetchTool);
 
   const permissionEngine = new PermissionEngine(PermissionMode.Default, process.cwd());
   const promptAssembler = new PromptAssembler({ systemPrompt: CODING_SYSTEM_PROMPT, maxContextTokens: 8192, preserveLastNTurns: 4 });
