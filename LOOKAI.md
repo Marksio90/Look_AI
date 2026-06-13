@@ -1,3 +1,75 @@
+# LookAI — Faza 3 (Zakończona)
+
+## Cel fazy
+Implementacja: orchestrator (API + WebSocket multi-session), RAG (SimpleRag z cosine similarity), observability (OTel traces + Prometheus metrics), eval-harness, long-running task z disk state.
+
+## Co dostarczono
+
+### 1. services/orchestrator — API + WebSocket
+- **Orchestrator**: Fastify + WebSocket server, port 3000.
+- **SessionManager**: in-memory store z historią wiadomości per session.
+- **REST**: POST /sessions, GET /sessions/:id, POST /sessions/:id/message, GET /health.
+- **WebSocket**: real-time streaming per session (join/leave/message events).
+- **Integracja**: Web UI (Faza 4) będzie łączyć się przez WebSocket.
+
+### 2. packages/memory/rag — SimpleRag
+- **SimpleRag**: indeksuje pliki, chunkuje tekst, generuje embeddings (word-frequency vectors — zero external deps, zero VRAM).
+- **cosineSimilarity**: ranking wyników wyszukiwania.
+- **indexFile() / indexDirectory()**: budowa bazy wiedzy projektu.
+- **search()**: top-K wyników z metryką podobieństwa.
+- **Kalibracja**: word-frequency embeddings = lekkie, działają na CPU; wystarczające dla kodu źródłowego.
+
+### 3. packages/shared/observability — Tracer + Metrics
+- **SimpleTracer**: lightweight OpenTelemetry-compatible tracing (trace/span hierarchy, timing, attributes, events, errors).
+- **SimpleSpan**: indywidualne spany z parentId.
+- **MetricsRegistry**: Prometheus-compatible metrics (counter, gauge, histogram) z exportem do formatu Prometheus.
+- **Zero external deps**: nie ma @opentelemetry/sdk — oszczędza RAM.
+
+### 4. packages/core/task — LongRunningTask
+- **Planner → Generator → Evaluator**: wielokrokowe zadania z iteracjami.
+- **Disk state**: `.lookai/tasks/{taskId}.json` — zapis/odczyt stanu między krokami.
+- **Survives context limit**: stan na dysku, nie w kontekście; można wznowić po restarcie.
+- **cleanup()**: usuwa plik stanu po zakończeniu.
+
+### 5. services/eval-harness — Ocena trajektorii
+- **EvalHarness**: uruchamia zadania, porównuje output z expected.
+- **EvalTask**: definicja z prompt, expected, timeout, tools.
+- **EvalResult**: pass/fail ze score, duration, token usage.
+- **createDefaultEvalSuite()**: podstawowy smoke test suite.
+- **phase3-smoke.test.ts**: 7 testów integracyjnych weryfikujących orchestrator, RAG, observability, long-running task.
+
+## Bramka weryfikacyjna (smoke test)
+Scenariusz end-to-end: `phase3-smoke.test.ts` weryfikuje:
+- (a) Orchestrator tworzy sesje i przyjmuje wiadomości ✅
+- (b) RAG odpowiada z wiedzy projektu (index + search) ✅
+- (c) Tracer tworzy spany i eksportuje OTel format ✅
+- (d) MetricsRegistry liczy metryki i eksportuje Prometheus ✅
+- (e) LongRunningTask zapisuje/odczytuje stan z dysku ✅
+- (f) EvalHarness uruchamia suite i raportuje wyniki ✅
+- (g) 2+ równoległe sesje via orchestrator ✅
+
+## Stan bramek weryfikacyjnych
+| Kryterium | Wynik |
+|---|---|
+| Build | ✅ Czysty |
+| Typecheck | ✅ Czysty |
+| Testy jednostkowe | ✅ 45/45 zielone (13 pakietów) |
+| Lint | ✅ Czysty (3 warningi `any` w OllamaClient, akceptowalne) |
+| Smoke test | ✅ Przechodzi (7 asercji end-to-end) |
+
+## Co NIE zostało zrobione (świadomie odłożone)
+- ❌ Web UI (React + Tailwind) — nadal TUI
+- ❌ VS Code extension
+- ❌ MCP marketplace
+- ❌ Zbieranie trajektorii (eval-harness ma runner, nie ma zapisu trajektorii)
+- ❌ Sufit lokalny udokumentowany
+- ❌ Full Qdrant/Pinecone RAG (SimpleRag wystarcza dla kodu źródłowego)
+- ❌ Grafana dashboard (metrics są w formacie Prometheus, brak serwera Grafana)
+- ❌ Realne podłączenie serwera MCP (np. filesystem, GitHub)
+- ❌ Pełna izolacja Docker w testach
+
+---
+
 # LookAI — Faza 2 (Zakończona)
 
 ## Cel fazy
