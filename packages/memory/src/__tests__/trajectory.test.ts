@@ -45,10 +45,30 @@ describe('TrajectoryStore', () => {
     expect(store.filterByOutcome('failure')).toHaveLength(1);
   });
 
-  it('exports JSON', () => {
+  it('saves and loads from disk', () => {
     const store = new TrajectoryStore();
-    store.start('s1');
-    const json = store.exportJson();
-    expect(JSON.parse(json)).toHaveLength(1);
+    const traj = store.start('s1');
+    store.addStep(traj.id, { turn: 1, timestamp: Date.now(), role: 'user', content: 'Hello' });
+    store.finish(traj.id, 'success', 0.9);
+    store.saveToDisk(traj.id);
+
+    const store2 = new TrajectoryStore();
+    store2.loadFromDisk();
+    const loaded = store2.get(traj.id);
+    expect(loaded).toBeDefined();
+    expect(loaded!.outcome).toBe('success');
+    expect(loaded!.score).toBe(0.9);
+    expect(loaded!.steps).toHaveLength(1);
+  });
+
+  it('lists from disk index', () => {
+    const store = new TrajectoryStore();
+    const traj = store.start('s2');
+    store.finish(traj.id, 'failure');
+    store.saveToDisk(traj.id);
+
+    const list = store.listFromDisk();
+    expect(list.length).toBeGreaterThan(0);
+    expect(list.some((l) => l.id === traj.id && l.outcome === 'failure')).toBe(true);
   });
 });
