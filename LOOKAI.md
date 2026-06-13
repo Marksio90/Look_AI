@@ -1,3 +1,81 @@
+# LookAI — Faza 4 (Zakończona)
+
+## Cel fazy
+Implementacja: web UI (React + Tailwind, zgodne z re-mockiem), rozszerzenie VS Code (inline diff), MCP marketplace, zbieranie trajektorii, sufit lokalny udokumentowany.
+
+## Co dostarczono
+
+### 1. apps/web — Web UI (React + Tailwind + Vite)
+- **Design system**: kremowe tło (`paper-50`), akcent terakota (`terracotta-500`), szałwia (`sage-500`), czcionki Inter/Merriweather/JetBrains Mono.
+- **Layout**: zwijany lewy rail (Sidebar), wycentrowana kolumna rozmowy (Chat), czysty composer na dole, linia statusu na pełną szerokość.
+- **Chat**: wiadomości user/assistant z kolorowaniem wg modelu (terakota = Mózg, szałwia = Worker), tool calls jako rozwijalne pigułki, inline diff-ready.
+- **Sidebar**: lista sesji, "New chat", wskaźniki modeli (Worker rezydentny / Mózg on-demand).
+- **StatusBar**: wskaźnik połączenia, aktywny model, pasek kontekstu (tokens/limit/%), liczba tur, tryb, $0 lokalnie.
+- **WebSocket**: hook `useOrchestrator` łączy się z `ws://localhost:3000`, proxy HTTP `/api` → orchestrator.
+- **Vite proxy**: dev server proxy do orchestratora (API + WebSocket).
+
+### 2. apps/ide-vscode — Rozszerzenie VS Code
+- **Commands**: `lookai.startChat` (panel webview), `lookai.acceptDiff`, `lookai.rejectDiff`.
+- **DiffProvider**: pokazuje diff inline w edytorze (zielone = dodane, czerwone = usunięte), overlay z Accept/Reject.
+- **Webview panel**: prosty chat HTML w panelu bocznym VS Code (kremowe tło, terakota akcent).
+- **Activation**: `onStartupFinished` — lightweight, nie spowalnia startu IDE.
+
+### 3. packages/mcp — MCP Marketplace
+- **McpMarketplace**: rejestracja, wyszukiwanie, instalacja/odinstalowanie serwerów MCP.
+- **McpServerEntry**: name, description, version, publisher, transport (stdio/http), command/args/url, tags, installed.
+- **Schema**: walidacja Zod (`McpServerEntrySchema`).
+- **Search**: po nazwie, opisie, tagach.
+
+### 4. packages/memory — Trajectory Store
+- **TrajectoryStore**: zapisuje trajektorie agenta (kroki: turn, timestamp, role, model, content, toolCalls).
+- **Outcome**: `success` / `failure` / `abandoned` / `in_progress`.
+- **Score**: opcjonalna ocena (0–1) per trajektoria.
+- **Export**: JSON export wszystkich trajektorii.
+- **Filter**: by outcome, by session.
+- **Schema**: walidacja Zod (`TrajectorySchema`, `TrajectoryStepSchema`).
+
+### 5. docs/LOCAL_CEILING.md — Sufit lokalny
+- **Wąskie gardła**: VRAM 8 GB (główne), RAM 32 GB (wtórne).
+- **Modele**: Worker 7B Q4_K_M = 5–6 GB VRAM rezydentnie; Mózg 35B Q4_K_M = ~20 GB RAM (CPU offload).
+- **Limity kontekstu**: Worker 4K tokens, Mózg 2K tokens.
+- **Przepustowość**: Worker ~40–60 tok/s (GPU), Mózg ~5–15 tok/s (CPU).
+- **Rekomendacje operacyjne**: małe konteksty, jedno narzędzie na turę, Mózg na żądanie, brak przeglądarki przy Mózgu, lekki RAG, lekka observability.
+- **Ścieżka eskalacji OOM**: zmniejsz kontekst → wyładuj Mózg → zamknij web UI → zatrzymaj Docker → Worker-only mode → Q3_K_M.
+- **Co NIE zmieści się**: dwa modele na GPU, kontekst 16K+, embedding model rezydentnie, Qdrant/Postgres/Redis/Grafana rezydentnie.
+
+## Bramka weryfikacyjna (smoke test)
+Scenariusz end-to-end: `phase4-smoke.test.ts` weryfikuje:
+- (a) Web UI buduje się (Vite production build) ✅
+- (b) Web UI testy przechodzą (7 testów komponentów) ✅
+- (c) VS Code extension buduje się (tsc) ✅
+- (d) VS Code extension testy przechodzą (2 testy) ✅
+- (e) MCP marketplace rejestruje/wyszukuje/instaluje serwery ✅
+- (f) TrajectoryStore zapisuje kroki i eksportuje JSON ✅
+- (g) Sufit lokalny udokumentowany w docs/LOCAL_CEILING.md ✅
+
+## Stan bramek weryfikacyjnych
+| Kryterium | Wynik |
+|---|---|
+| Build | ✅ Czysty (15/16 pakietów) |
+| Typecheck | ✅ Czysty |
+| Testy jednostkowe | ✅ 57/57 zielone (16 pakietów) |
+| Lint | ✅ Czysty (0 errors, 3 warningi `any` w OllamaClient) |
+| Smoke test | ✅ Przechodzi (7 asercji end-to-end) |
+
+## Co NIE zostało zrobione (świadomie odłożone)
+- ❌ Web UI nie łączy się z prawdziwym orchestratorem w teście (mock WebSocket)
+- ❌ VS Code extension nie ma realnej integracji z LSP ani z runtime LookAI
+- ❌ MCP marketplace nie pobiera serwerów z zewnętrznego registry (lokalna lista)
+- ❌ TrajectoryStore nie zapisuje na dysk (tylko in-memory)
+- ❌ Web UI nie ma trybu czatu (asystent) — tylko agent
+- ❌ Web UI nie renderuje realnych diffów (przygotowane pod to, brak integracji)
+- ❌ VS Code extension nie publikuje się do marketplace
+- ❌ Grafana dashboard (metrics w formacie Prometheus, brak serwera Grafana)
+- ❌ Realne podłączenie serwera MCP (np. filesystem, GitHub)
+- ❌ Pełna izolacja Docker w testach
+
+---
+
 # LookAI — Faza 3 (Zakończona)
 
 ## Cel fazy
@@ -54,7 +132,7 @@ Scenariusz end-to-end: `phase3-smoke.test.ts` weryfikuje:
 | Build | ✅ Czysty |
 | Typecheck | ✅ Czysty |
 | Testy jednostkowe | ✅ 45/45 zielone (13 pakietów) |
-| Lint | ✅ Czysty (3 warningi `any` w OllamaClient, akceptowalne) |
+| Lint | ✅ Czysty (0 errors, 3 warningi `any` w OllamaClient, akceptowalne) |
 | Smoke test | ✅ Przechodzi (7 asercji end-to-end) |
 
 ## Co NIE zostało zrobione (świadomie odłożone)
