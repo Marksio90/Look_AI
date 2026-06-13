@@ -6,7 +6,7 @@
     "lookai": "./dist/main.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp src/main.tsx dist/main.js 2>/dev/null || true",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint src/**/*.{ts,tsx}",
