@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+
+const MARKETPLACE_DIR = join(homedir(), '.lookai', 'marketplace');
+const INSTALLED_FILE = join(MARKETPLACE_DIR, 'installed.json');
+const REGISTRY_URL = 'https://raw.githubusercontent.com/modelcontextprotocol/servers/main/README.md'; // Fallback placeholder
 
 export interface McpServerEntry {
   name: string;
@@ -54,6 +61,66 @@ export class McpMarketplace {
 
   getInstalled(): McpServerEntry[] {
     return this.servers.filter((s) => s.installed);
+  }
+
+  private ensureDir(): void {
+    if (!existsSync(MARKETPLACE_DIR)) {
+      mkdirSync(MARKETPLACE_DIR, { recursive: true });
+    }
+  }
+
+  saveInstalled(): void {
+    this.ensureDir();
+    const installed = this.getInstalled().map((s) => s.name);
+    writeFileSync(INSTALLED_FILE, JSON.stringify(installed, null, 2));
+  }
+
+  loadInstalled(): void {
+    this.ensureDir();
+    if (!existsSync(INSTALLED_FILE)) return;
+    const names = JSON.parse(readFileSync(INSTALLED_FILE, 'utf-8')) as string[];
+    for (const name of names) {
+      const entry = this.findByName(name);
+      if (entry) entry.installed = true;
+    }
+  }
+
+  async fetchFromRegistry(url?: string): Promise<number> {
+    const registryUrl = url ?? REGISTRY_URL;
+    try {
+      const res = await fetch(registryUrl);
+      if (!res.ok) return 0;
+      const text = await res.text();
+      // Parse markdown table of MCP servers (best-effort)
+      const lines = text.split('\n');
+      let added = 0;
+      for (const line of lines) {
+        const match = line.match(/\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/);
+        if (match && !line.includes('---')) {
+          const name = match[1].trim();
+          const desc = match[2].trim();
+          const url = match[3].trim();
+          if (name && desc && url && !this.findByName(name)) {
+            this.register({
+              name,
+              description: desc,
+              version: '1.0.0',
+              publisher: 'community',
+              transport: url.startsWith('http') ? 'http' : 'stdio',
+              url: url.startsWith('http') ? url : undefined,
+              command: url.startsWith('http') ? undefined : 'npx',
+              args: url.startsWith('http') ? undefined : ['-y', url],
+              tags: [],
+              installed: false,
+            });
+            added++;
+          }
+        }
+      }
+      return added;
+    } catch {
+      return 0;
+    }
   }
 }
 
