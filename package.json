@@ -12,11 +12,14 @@
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {
-    "@types/node": "^22.13.0",
-    "typescript": "^5.7.3",
-    "vitest": "^3.0.5",
-    "eslint": "^9.20.0",
     "@eslint/js": "^9.20.0",
-    "globals": "^15.14.0"
+    "@types/node": "^22.13.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "eslint": "^9.20.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.61.0",
+    "vitest": "^3.0.5"
   }
 }

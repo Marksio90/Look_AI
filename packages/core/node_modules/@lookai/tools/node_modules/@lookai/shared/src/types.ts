@@ -46,7 +46,8 @@ export const LLMOptionsSchema = z.object({
 export type LLMOptions = z.infer<typeof LLMOptionsSchema>;
 
 export interface LLMClient {
-  create(_messages: Message[], _tools: ToolDef[], _opts?: LLMOptions): Promise<LLMResponse>;
+  // eslint-disable-next-line no-unused-vars
+  create(messages: Message[], tools: ToolDef[], opts?: LLMOptions): Promise<LLMResponse>;
 }
 
 export const ToolDefSchema = z.object({
@@ -66,5 +67,6 @@ export interface Tool {
   name: string;
   description: string;
   parameters: z.ZodTypeAny;
-  execute(_args: Record<string, unknown>): Promise<ToolResult> | ToolResult;
+  // eslint-disable-next-line no-unused-vars
+  execute(args: Record<string, unknown>): Promise<ToolResult> | ToolResult;
 }

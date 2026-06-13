@@ -1,7 +1,7 @@
 import type { LLMClient } from "@lookai/shared";
 import type { ToolRegistry } from "@lookai/tools";
 import type { Message, ToolCall, LLMResponse, ToolResult } from "@lookai/shared";
-import type { RuntimeConfig, TurnHandler, TurnEvent, UsageTracker } from "./types.js";
+import type { RuntimeConfig, TurnHandler, UsageTracker } from "./types.js";
 
 function makeSystemMessage(prompt: string): Message {
   return { role: "system", content: prompt };
@@ -69,6 +69,18 @@ export class AgentRuntime {
         await onTurn?.({ type: "text", text: response.text, usage: response.usage });
       }
 
+      // Fallback: parse JSON tool call from text for local models that don't emit native tool_calls
+      if (response.text && (response.stopReason === "end_turn" || response.stopReason === "tool_use")) {
+        const parsed = this.tryParseToolCall(response.text);
+        if (parsed) {
+          await onTurn?.({ type: "tool_call", toolCall: parsed, usage: response.usage });
+          const result = await this.executeTool(parsed);
+          await onTurn?.({ type: "tool_result", toolResult: { ...result, toolCallId: parsed.id, toolName: parsed.name }, usage: response.usage });
+          this.messages.push(makeToolResultMessage(parsed, result));
+          continue;
+        }
+      }
+
       if (response.stopReason === "end_turn") {
         await onTurn?.({ type: "done", usage: response.usage });
         return { done: true, reason: "end_turn" };
@@ -98,6 +110,18 @@ export class AgentRuntime {
         this.messages.push(makeToolResultMessage(tc, result));
         continue;
       }
+
+      // Fallback: parse JSON tool call from text for local models that don't emit native tool_calls
+      if (response.text) {
+        const parsed = this.tryParseToolCall(response.text);
+        if (parsed) {
+          await onTurn?.({ type: "tool_call", toolCall: parsed, usage: response.usage });
+          const result = await this.executeTool(parsed);
+          await onTurn?.({ type: "tool_result", toolResult: { ...result, toolCallId: parsed.id, toolName: parsed.name }, usage: response.usage });
+          this.messages.push(makeToolResultMessage(parsed, result));
+          continue;
+        }
+      }
     }
 
     await onTurn?.({ type: "error", error: `maxTurns (${this.config.maxTurns}) reached` });
@@ -117,5 +141,21 @@ export class AgentRuntime {
       this.readFiles.add(path);
     }
     return this.registry.dispatch(tc.name, tc.arguments);
+  }
+
+  private tryParseToolCall(text: string): ToolCall | null {
+    let trimmed = text.trim();
+    // Strip markdown code fences if present
+    if (trimmed.startsWith("```")) {
+      trimmed = trimmed.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "").trim();
+    }
+    if (!trimmed.startsWith("{")) return null;
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>;
+      if (typeof obj.name !== "string" || typeof obj.arguments !== "object" || obj.arguments === null) return null;
+      return { id: `parsed-${Date.now()}`, name: obj.name, arguments: obj.arguments as Record<string, unknown> };
+    } catch {
+      return null;
+    }
   }
 }

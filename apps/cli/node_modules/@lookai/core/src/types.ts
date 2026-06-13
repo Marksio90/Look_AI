@@ -1,4 +1,4 @@
-import type { Message, ToolCall, LLMResponse, Usage, ToolResult } from "@lookai/shared";
+import type { ToolCall, Usage, ToolResult } from "@lookai/shared";
 
 export interface RuntimeConfig {
   maxTurns: number;
@@ -21,4 +21,5 @@ export interface TurnEvent {
   usage?: Usage;
 }
 
-export type TurnHandler = (event: TurnEvent) => void | Promise<void>;
+export type TurnHandler = (// eslint-disable-next-line no-unused-vars
+event: TurnEvent) => void | Promise<void>;
