@@ -156,7 +156,7 @@ export class DualModelRouter {
     this.worker = worker;
     this.brain = brain;
     this.workerModel = opts?.workerModel ?? "qwen2.5-coder:7b";
-    this.brainModel = opts?.brainModel ?? "qwen3.6-35b-a3b";
+    this.brainModel = opts?.brainModel ?? "qwen3:30b-a3b";
   }
 
   async create(

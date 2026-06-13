@@ -83,7 +83,7 @@ export default function Sidebar({ sessions, activeId, onSwitch, onNew, expanded,
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-terracotta-400" />
-            <span>Mózg (35B) — on-demand</span>
+            <span>Mózg (30B) — on-demand</span>
           </div>
         </div>
       </div>

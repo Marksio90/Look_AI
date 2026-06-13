@@ -14,7 +14,7 @@ Model-agnostyczny "harness" agentowy: pętla agentowa (routing po `stop_reason`)
 
 ### Kluczowe cechy
 
-- **Dual-model routing**: Worker (Qwen2.5-Coder-7B, rezydentny GPU) dla narzędzi/edycji + Mózg (Qwen3.6-35B-A3B, na żądanie CPU) dla planowania
+- **Dual-model routing**: Worker (Qwen2.5-Coder-7B, rezydentny GPU) dla narzędzi/edycji + Mózg (Qwen3 30B-A3B, na żądanie CPU) dla planowania
 - **Tool-use walidowany Zodem**: każde wywołanie narzędzia walidowane, re-prompt przy błędzie (max 2 próby)
 - **Auto-kompakcja kontekstu**: ~70% budżetu, LOOKAI.md przeżywa kompakcję
 - **Sandbox Docker/WSL2**: efemeryczne kontenery per zadanie, egress allowlist
@@ -46,7 +46,7 @@ Model-agnostyczny "harness" agentowy: pętla agentowa (routing po `stop_reason`)
 ollama pull qwen2.5-coder:7b
 
 # Mózg — ładowany na żądanie (CPU offload, ~20 GB RAM)
-ollama pull qwen3.6-35b-a3b
+ollama pull qwen3:30b-a3b
 ```
 
 > **Uwaga sprzętowa**: 8 GB VRAM to wąskie gardło. Worker musi być rezydentny. Mózg ładować tylko na czas planowania i zwalniać po. Przy 32 GB RAM — zamknąć przeglądarkę/IDE podczas pracy Mózgu. Szczegóły w [`docs/LOCAL_CEILING.md`](docs/LOCAL_CEILING.md).
@@ -262,7 +262,7 @@ ollama serve  # w osobnym terminalu
 
 # OOM? — ścieżka eskalacji
 # 1. Zmniejsz kontekst (4K → 2K → 1K)
-# 2. Wyładuj Mózg: ollama stop qwen3.6-35b-a3b
+# 2. Wyładuj Mózg: ollama stop qwen3:30b-a3b
 # 3. Zamknij web UI / IDE / przeglądarkę
 # 4. Zatrzymaj Docker (jeśli nie używasz sandbox)
 # 5. Przejdź na Worker-only mode

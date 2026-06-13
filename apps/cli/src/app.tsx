@@ -76,7 +76,7 @@ export default function App({ memoryEnabled = false, resumeMode = false, continu
 
   const baseUrl = process.env.LOOKAI_OLLAMA_URL ?? "http://localhost:11434/v1";
   const workerModel = process.env.LOOKAI_WORKER_MODEL ?? "qwen2.5-coder:7b";
-  const brainModel = process.env.LOOKAI_BRAIN_MODEL ?? "qwen3.6-35b-a3b";
+  const brainModel = process.env.LOOKAI_BRAIN_MODEL ?? "qwen3:30b-a3b";
 
   const worker = new OllamaClient({ baseUrl, defaultModel: workerModel, defaultTemperature: 0.1 });
   const brain = new OllamaClient({ baseUrl, defaultModel: brainModel, defaultTemperature: 0.2 });
