@@ -1,0 +1,40 @@
+{
+  "name": "@lookai/orchestrator",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@lookai/shared": "workspace:*",
+    "@lookai/core": "workspace:*",
+    "@lookai/llm": "workspace:*",
+    "@lookai/tools": "workspace:*",
+    "@lookai/security": "workspace:*",
+    "@lookai/context": "workspace:*",
+    "@lookai/memory": "workspace:*",
+    "@lookai/sandbox": "workspace:*",
+    "@lookai/mcp": "workspace:*",
+    "@lookai/web": "workspace:*",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

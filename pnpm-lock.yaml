@@ -294,6 +294,95 @@ importers:
         specifier: ^3.0.5
         version: 3.2.6(@types/node@22.19.21)
 
+  services/eval-harness:
+    dependencies:
+      '@lookai/context':
+        specifier: workspace:*
+        version: link:../../packages/context
+      '@lookai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@lookai/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@lookai/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@lookai/security':
+        specifier: workspace:*
+        version: link:../../packages/security
+      '@lookai/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@lookai/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.19.21
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)
+
+  services/orchestrator:
+    dependencies:
+      '@lookai/context':
+        specifier: workspace:*
+        version: link:../../packages/context
+      '@lookai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@lookai/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@lookai/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@lookai/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@lookai/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+      '@lookai/security':
+        specifier: workspace:*
+        version: link:../../packages/security
+      '@lookai/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@lookai/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+      '@lookai/web':
+        specifier: workspace:*
+        version: link:../../packages/web
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.0
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.19.21
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.6(@types/node@22.19.21)
+
 packages:
 
   '@alcalzone/ansi-tokenize@0.3.0':
@@ -675,6 +764,9 @@ packages:
 
   '@types/react@19.2.17':
     resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@typescript-eslint/eslint-plugin@8.61.0':
     resolution: {integrity: sha512-bFNvl9ZczlVb+wR2Akszf3gHfKVj/8WanXaGJ3UstTA7brNKg0cNdk6X1Psu5V7MZ2oQtzZKOEzIUehaoxbDGw==}
@@ -2039,6 +2131,10 @@ snapshots:
   '@types/react@19.2.17':
     dependencies:
       csstype: 3.2.3
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 22.19.21
 
   '@typescript-eslint/eslint-plugin@8.61.0(@typescript-eslint/parser@8.61.0(eslint@9.39.4)(typescript@5.9.3))(eslint@9.39.4)(typescript@5.9.3)':
     dependencies:
