@@ -1,5 +1,5 @@
 import { test, expect } from "vitest";
-import { SearxngAdapter, WebSearchTool, WebFetchTool } from "../src/search.js";
+import { SearxngAdapter, WebSearchTool, WebFetchTool } from "../search.js";
 
 test("WebSearchTool creates tool with correct name", () => {
   const adapter = new SearxngAdapter("http://localhost:8080");
