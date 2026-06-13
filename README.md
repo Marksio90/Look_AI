@@ -69,14 +69,16 @@ pnpm run build
 # 4. Uruchom testy
 pnpm run test
 
-# 5. Uruchom TUI (terminal)
-cd apps/cli && pnpm run dev
+# 5. Uruchom TUI agenta (terminal)
+pnpm start
 
-# 6. Uruchom Web UI (przeglądarka)
-cd apps/web && pnpm run dev
+# 6. ...albo cały stack webowy: orchestrator (:3000/:3001) + Web UI (:5173)
+pnpm dev
 
-# 7. Uruchom orchestrator (backend)
-cd services/orchestrator && pnpm run dev
+# Pojedynczo, z roota i bez cd:
+#   pnpm dev:web    — tylko Web UI
+#   pnpm dev:orch   — tylko orchestrator (backend)
+#   pnpm dev:cli    — TUI w trybie dev (rebuild + run)
 ```
 
 ---
@@ -119,8 +121,8 @@ monorepo (pnpm workspaces)
 ### TUI (Ink — terminal)
 
 ```bash
-cd apps/cli
-pnpm run dev
+# z roota repo, bez cd:
+pnpm start        # albo: pnpm dev:cli (rebuild + run)
 ```
 
 - Konwersacja w centrum, composer na dole, linia statusu
@@ -131,8 +133,8 @@ pnpm run dev
 ### Web UI (React + Tailwind)
 
 ```bash
-cd apps/web
-pnpm run dev
+# z roota repo, bez cd:
+pnpm dev:web      # samo UI; backend: pnpm dev:orch (albo pnpm dev = oba)
 ```
 
 - Otwórz `http://localhost:5173`
@@ -192,18 +194,23 @@ Szczegóły w [`docs/LOCAL_CEILING.md`](docs/LOCAL_CEILING.md).
 ## Skrypty
 
 ```bash
-# Root
+# Root — budowanie / jakość
 pnpm run build      # Build wszystkich pakietów
 pnpm run test       # Testy wszystkich pakietów
 pnpm run lint       # Lint wszystkich pakietów
 pnpm run typecheck  # Typecheck wszystkich pakietów
-pnpm run clean      # rm -rf dist/
+pnpm run clean      # Usuń dist/ we wszystkich pakietach
 
-# Per package (np. packages/core)
-cd packages/core
-pnpm run build
-pnpm run test
-pnpm run lint
+# Root — uruchamianie (bez cd)
+pnpm start          # TUI agenta (apps/cli)
+pnpm dev            # orchestrator + Web UI równolegle
+pnpm dev:web        # tylko Web UI
+pnpm dev:orch       # tylko orchestrator
+pnpm dev:cli        # TUI w trybie dev
+
+# Pojedynczy pakiet — przez --filter (-F), też z roota:
+pnpm -F @lookai/core build
+pnpm -F @lookai/core test
 ```
 
 ---

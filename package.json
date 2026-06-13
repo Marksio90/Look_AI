@@ -5,6 +5,11 @@
   "description": "LookAI — local agentic coding harness",
   "scripts": {
     "build": "pnpm -r run build",
+    "dev": "pnpm --parallel --filter @lookai/orchestrator --filter @lookai/web run dev",
+    "dev:cli": "pnpm --filter @lookai/cli run dev",
+    "dev:web": "pnpm --filter @lookai/web run dev",
+    "dev:orch": "pnpm --filter @lookai/orchestrator run dev",
+    "start": "pnpm --filter @lookai/cli run start",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
