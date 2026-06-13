@@ -1,6 +1,6 @@
 import { test, expect, describe } from "vitest";
 import { Orchestrator } from "@lookai/orchestrator";
-import { EvalHarness, createDefaultEvalSuite } from "@lookai/eval-harness";
+import { EvalHarness, createDefaultEvalSuite } from "../harness.js";
 import { SimpleRag } from "@lookai/memory";
 import { Tracer, MetricsCollector } from "@lookai/shared";
 import { LongRunningTask } from "@lookai/core";
@@ -23,7 +23,6 @@ describe("Phase 3 Integration Smoke Test", () => {
 
   test("(c) SimpleRag indexes and queries", async () => {
     const rag = new SimpleRag();
-    // Manually add document with embedding
     const embedding = await rag["embeddingFn"]("hello world test");
     rag["documents"].push({
       id: "test-1",

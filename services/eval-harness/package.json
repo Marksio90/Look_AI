@@ -25,6 +25,7 @@
     "@lookai/security": "workspace:*",
     "@lookai/context": "workspace:*",
     "@lookai/memory": "workspace:*",
+    "@lookai/orchestrator": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

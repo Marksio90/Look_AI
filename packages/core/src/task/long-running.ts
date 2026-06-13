@@ -40,7 +40,7 @@ export class LongRunningTask {
   deleteState(taskId: string): void {
     const path = join(this.stateDir, `${taskId}.json`);
     if (existsSync(path)) {
-      const { unlinkSync } = await import("node:fs");
+      const { unlinkSync } = require("node:fs");
       unlinkSync(path);
     }
   }

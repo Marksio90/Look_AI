@@ -308,6 +308,9 @@ importers:
       '@lookai/memory':
         specifier: workspace:*
         version: link:../../packages/memory
+      '@lookai/orchestrator':
+        specifier: workspace:*
+        version: link:../orchestrator
       '@lookai/security':
         specifier: workspace:*
         version: link:../../packages/security
