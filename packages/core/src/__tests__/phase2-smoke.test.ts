@@ -1,7 +1,7 @@
 import { test, expect, describe } from "vitest";
 import { McpClientManager, mcpToolToLookaiTool } from "@lookai/mcp";
 import { SandboxRunner, isDomainAllowed, logBlockedEgress } from "@lookai/sandbox";
-import { HookEngine, createTestAfterEditHook } from "@lookai/security";
+import { HookEngine } from "@lookai/security";
 import { runSubagent } from "@lookai/core";
 import { ToolRegistry } from "@lookai/tools";
 
