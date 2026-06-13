@@ -144,3 +144,48 @@ export class OllamaClient implements LLMClient {
     return { stopReason, text, toolCalls, usage };
   }
 }
+
+export class DualModelRouter {
+  private worker: LLMClient;
+  private brain: LLMClient;
+  private workerModel: string;
+  private brainModel: string;
+  private badToolUseCount = 0;
+
+  constructor(worker: LLMClient, brain: LLMClient, opts?: { workerModel?: string; brainModel?: string }) {
+    this.worker = worker;
+    this.brain = brain;
+    this.workerModel = opts?.workerModel ?? "qwen2.5-coder:7b";
+    this.brainModel = opts?.brainModel ?? "qwen3.6-35b-a3b";
+  }
+
+  async create(
+    messages: Message[],
+    tools: ToolDef[],
+    opts?: LLMOptions & { mode?: "worker" | "brain" }
+  ): Promise<LLMResponse & { model: string }> {
+    const mode = opts?.mode ?? "worker";
+    if (mode === "brain") {
+      const res = await this.brain.create(messages, tools, { ...opts, model: this.brainModel });
+      return { ...res, model: this.brainModel };
+    }
+    const res = await this.worker.create(messages, tools, { ...opts, model: this.workerModel });
+    return { ...res, model: this.workerModel };
+  }
+
+  recordToolUseOk(): void {
+    this.badToolUseCount = 0;
+  }
+
+  recordToolUseBad(): void {
+    this.badToolUseCount++;
+  }
+
+  shouldEscalate(): boolean {
+    return this.badToolUseCount >= 2;
+  }
+
+  resetEscalation(): void {
+    this.badToolUseCount = 0;
+  }
+}

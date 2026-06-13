@@ -1,5 +1,5 @@
 {
-  "name": "@lookai/core",
+  "name": "@lookai/memory",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,13 +18,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@lookai/shared": "workspace:*",
-    "@lookai/llm": "workspace:*",
-    "@lookai/tools": "workspace:*",
-    "@lookai/security": "workspace:*",
-    "@lookai/context": "workspace:*",
-    "@lookai/memory": "workspace:*",
-    "zod": "^3.24.1"
+    "@lookai/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

@@ -1,4 +1,4 @@
-import type { ToolCall, Usage, ToolResult } from "@lookai/shared";
+import type { ToolCall, ToolResult, Usage } from "@lookai/shared";
 
 export interface RuntimeConfig {
   maxTurns: number;
@@ -13,12 +13,14 @@ export interface UsageTracker {
 }
 
 export interface TurnEvent {
-  type: "text" | "tool_call" | "tool_result" | "error" | "done";
+  type: "text" | "tool_call" | "tool_result" | "error" | "done" | "permission_request";
   text?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult & { toolCallId: string; toolName: string };
+  request?: unknown;
   error?: string;
   usage?: Usage;
+  model?: string;
 }
 
 export type TurnHandler = (// eslint-disable-next-line no-unused-vars

@@ -1,81 +1,78 @@
-# LookAI — Faza 0 (Zakończona)
+# LookAI — Faza 1 (Zakończona)
 
 ## Cel fazy
-Minimalna, działająca pętla agentowa: monorepo + gateway LLM (Ollama) + narzędzia (Read/Write/Edit/Bash) + AgentRuntime + CLI REPL.
+Rozbudowa Fazy 0 o: nowe narzędzia (Glob, Grep), system uprawnień, zarządzanie kontekstem (kompakcja), pamięć (transkrypty JSONL, --resume), routing dual-model (Mózg/Worker), oraz TUI w Ink.
 
 ## Co dostarczono
 
-### 1. Szkielet monorepo (pnpm workspaces)
-- `packages/shared`, `packages/llm`, `packages/tools`, `packages/core`
-- `apps/cli`
-- TypeScript strict, vitest, eslint (typescript-eslint), root skrypty `build/test/lint/typecheck/clean`.
+### 1. packages/tools — rozbudowa
+- **Glob** — wyszukiwanie plików po wzorcu glob (`*`, `**`), sort po mtime, limit 100 plików.
+- **Grep** — wyszukiwanie treści regex w plikach lub katalogach, zwraca ścieżka:linia:treść.
+- **Edit** — `replace_all` (opcjonalny) do zmian masowych.
+- **Edit staleness** — porównanie mtime pliku z momentem Read (wymaga rozszerzenia w runtime).
 
-### 2. packages/llm — gateway LLM
-- `LLMClient` (interfejs) + `OllamaClient` (adapter OpenAI-compatible, domyślnie `http://localhost:11434/v1`).
-- Znormalizowana odpowiedź: `{ stopReason, text, toolCalls[], usage }`.
-- Na razie WSZYSTKO routowane do Workera (`qwen2.5-coder:7b`), temperatura 0.1.
-- Tryb `response_format: { type: "json_object" }` dostępny dla tur narzędziowych.
+### 2. packages/security — system uprawnień
+- **Cztery tryby**: `Default` (pytaj o zmiany), `AutoEdit` (auto-akceptuj edycje), `Plan` (tylko odczyt/analiza), `Auto` (pełna autonomia).
+- **Rule engine**: poziomy `ReadOnly < WorkspaceWrite < DangerFull`. Różnica 1 poziom → pytaj; więcej → odmów.
+- **Path-guard**: walidacja ścieżek (musi być wewnątrz workspace).
+- **Command security**: rozpoznawanie niebezpiecznych komend w Bash (rm -rf, curl | sh, itp.).
+- **Inline permission request**: zdarzenie `permission_request` w TurnEvent do renderu w UI.
 
-### 3. packages/tools — minimalny zestaw
-- `Read` — czyta plik z numerami linii, paginacja (max 200 linii), oznacza plik jako "przeczytany".
-- `Write` — tworzy/nadpisuje plik.
-- `Edit` — str-replace (`old_str` → `new_str`). WYMAGA wcześniejszego `Read` (egzekwowane przez runtime).
-- `Bash` — `child_process` w trwałej sesji (`cwd` i `env` utrzymują się między komendami).
-- `ToolRegistry` — rejestracja + dispatch po nazwie z walidacją Zod.
+### 3. packages/context — zarządzanie kontekstem
+- **PromptAssembler**: składa system prompt + LOOKAI.md + historia + bieżący prompt.
+- **Auto-kompakcja przy ~70% budżetu**: streść starsze wiadomości; zachowaj system/LOOKAI.md i ostatnie N tur dosłownie.
+- **ContextBudget**: szacowanie tokenów (4 chars ≈ 1 token).
 
-### 4. packages/core — AgentRuntime (serce, małe)
-- Stan = tablica `Message[]` (bez maszyny stanów, bez grafu workflow).
-- Pętla: `llm.create()` → routing po `stopReason`:
-  - `tool_use` → wykonaj narzędzie, dołącz `tool_result`, wróć do pętli.
-  - `end_turn` → zakończ.
-  - `max_tokens` / `error` → zakończ z błędem.
-- `UsageTracker` (tokeny, liczba tur).
-- `maxTurns` (domyślnie 25) — guard.
-- **Fallback parsowania JSON z tekstu** — dla lokalnych modeli, które nie emitują natywnych `tool_calls` (np. Qwen 3B/7B w Ollama), runtime wyciąga JSON z bloku markdown i traktuje go jako wywołanie narzędzia.
+### 4. packages/memory — pamięć
+- **LOOKAI.md**: wstrzykiwany do kontekstu, przeżywa kompakcję.
+- **Transkrypty JSONL**: każda sesja zapisywana jako `.jsonl` w `.lookai/sessions/`.
+- **--resume**: `MemoryStore` wczytuje ostatnią sesję przy starcie nowej.
+- **listSessions()**: lista sesji z sortowaniem po czasie.
 
-### 5. apps/cli — prosty REPL
-- Czyta prompt ze `stdin`, woła `AgentRuntime`, streamuje tekst, wypisuje wywołania narzędzi i wyniki w czytelnej formie.
-- Jeden prompt = jedna sesja agentowa. Pusta linia = wyjście.
+### 5. packages/core + packages/llm — routing dual-model
+- **DualModelRouter**: zarządza Workerem (`qwen2.5-coder:7b`, rezydentny) i Mózgiem (`qwen3.6-35b-a3b`, ładowany na żądanie).
+- **Routing**: tury planowania (pierwsza i co 5-ta) → Mózg; tury narzędziowe → Worker.
+- **Eskalacja**: 2× wadliwy tool-use u Workera → reset licznika, komunikat o eskalacji (Mózg w kolejnej turze).
+- **AgentRuntime** zintegrowany z `PermissionEngine`, `PromptAssembler`, `MemoryStore`.
+
+### 6. apps/cli — TUI w Ink
+- **Layout**: konwersacja w centrum (wycentrowana kolumna), composer na dole, linia statusu.
+- **Lewy rail**: zwijany panel (Escape), sesje/pliki/ustawienia.
+- **Inline actions**: pigułki narzędzi, wyniki tool_calls, komunikaty systemowe.
+- **Kolorowanie wg modelu**: terakota (czerwony) = Mózg, szałwia (zielony) = Worker.
+- **Status bar**: aktywny model, tokeny, liczba tur, $0 lokalnie.
 
 ## Kalibracja pod modele lokalne (zastosowana)
-1. **Twarde, strukturalne tool-use**: walidacja Zod każdego wywołania; przy wadliwym JSON re-prompt z błędem (max 2 próby) — w tej fazie fallback parsowania z tekstu kompensuje brak natywnych `tool_calls`.
-2. **Mało i małe narzędzia w kontekście**: 4 narzędzia, krótkie opisy.
-3. **Małe kroki**: jedno narzędzie na turę (egzekwowane).
-4. **Bramki walidacji**: `Read-before-Edit` egzekwowane (Edit bez wcześniejszego Read = błąd).
-5. **Dyscyplina kontekstu**: mały kontekst (maxTokens 2048 domyślnie), paginacja Read.
-6. **Determinizm**: temperatura 0.1.
-7. **Fallback dwóch modeli**: NIE zaimplementowano w tej fazie — na razie tylko Worker.
+1. **Twarde tool-use**: walidacja Zod + fallback parsowania JSON z tekstu.
+2. **Małe kroki**: jedno narzędzie na turę.
+3. **Kompakcja kontekstu**: auto-kompakcja przy 70% budżetu, LOOKAI.md zachowany.
+4. **Determinizm**: temperatura 0.1 (Worker), 0.2 (Mózg).
+5. **Fallback dual-model**: Worker domyślnie; Mózg przy planowaniu i eskalacji.
 
 ## Bramka weryfikacyjna (smoke test)
-- Utworzono plik `tmp_smoke/calc.ts` z błędem (`a - b` zamiast `a + b`) + test.
-- Agent (qwen2.5-coder:3b via Ollama) wykonał:
-  1. `read` — odczytał plik.
-  2. `edit` — naprawił błąd na `a + b`.
-  3. `bash` — uruchomił test (`npx vitest run calc.test.ts`), test przeszedł.
-- **Wynik**: pętla działa end-to-end, narzędzia są walidowane, `maxTurns` respektowane.
-- **Uwaga**: model 3B po sukcesie wpadł w pętlę `read` → `edit` z nieaktualnym `old_str` (nie zauważył, że zmiana już została wykonana). To znany problem z lokalnymi modelami małymi — do rozwiązania w Fazie 1 przez kompakcję kontekstu / lepszy prompt / samokorektę.
+- **Scenariusz**: checkout/withRetry — opakowanie fetch w retry z backoffiem + test.
+- **Wynik**: model 7B wykonał `read`, `edit` (dodał retry loop), `bash` (test nie przeszedł bo model użył `jest` zamiast `vitest` mocków), kolejne próby `edit` naprawy testu.
+- **Status**: pętla agentowa działa end-to-end, narzędzia są wykonywane, routing dual-model działa (widać zmianę modelu w statusie), kompakcja i memory podłączone.
+- **Ograniczenie**: model lokalny 7B ma trudności z pisaniem poprawnych testów Vitest (używa Jest). Do poprawy w Fazie 2 przez lepszy prompt systemowy.
 
 ## Stan bramek weryfikacyjnych
 | Kryterium | Wynik |
 |---|---|
 | Build | ✅ Czysty |
 | Typecheck | ✅ Czysty |
-| Testy jednostkowe | ✅ 14/14 zielone |
+| Testy jednostkowe | ✅ 17/17 zielone |
 | Lint | ✅ Czysty (3 warningi `any` w OllamaClient, akceptowalne) |
-| Smoke test end-to-end | ✅ Przeszedł (read → edit → bash/test) |
+| Smoke test | ⚠️ Częściowy (read → edit → bash działa; test nie przeszedł przez błąd modelu w mockach) |
 
 ## Co NIE zostało zrobione (świadomie odłożone)
 - ❌ MCP (klient JSON-RPC 2.0)
-- ❌ Subagenci
-- ❌ Sandbox (Docker/WSL2)
-- ❌ Ink/TUI — CLI to prosty REPL
-- ❌ Web UI
-- ❌ Kompakcja kontekstu / token budgeting
-- ❌ SQLite (stan w pamięci + JSONL na dysku dopiero w przyszłej fazie)
-- ❌ Routing dual-model (Mózg + Worker) — na razie tylko Worker
-- ❌ Pamięć długoterminowa (LOOKAI.md, RAG)
-- ❌ Security / permissions / path-guard
-- ❌ WebSocket / orchestrator API
+- ❌ Realna izolacja sandbox (Docker/WSL2) — egzekucja nadal lokalna
+- ❌ Web UI (React + Tailwind)
+- ❌ RAG / wektorowa pamięć
 - ❌ VS Code extension
+- ❌ Orchestrator API + WebSocket
 - ❌ Eval harness
-- ❌ Re-prompt przy wadliwym JSON (max 2 próby) — w tej fazie fallback parsowania z tekstu wystarcza; pełna logika retry w Fazie 1.
+- ❌ Pełna obsługa `replace_all` w Edit w bramce (zaimplementowana, ale model jej nie użył)
+- ❌ Staleness check w Edit (mtime porównanie) — wymaga rozszerzenia runtime o timestampy
+- ❌ Komendy `/context` i `/compact` w TUI (zaimplementowane w PromptAssembler, brak UI bindingu)
+- ❌ --continue (wybór sesji z listy) — tylko --resume (ostatnia sesja)
