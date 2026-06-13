@@ -3,6 +3,7 @@ import type { Message, ToolCall, LLMResponse, ToolResult } from "@lookai/shared"
 import type { DualModelRouter } from "@lookai/llm";
 import type { PermissionEngine } from "@lookai/security";
 import type { PromptAssembler } from "@lookai/context";
+import type { MemoryStore } from "@lookai/memory";
 import type { HookEngine } from "@lookai/security";
 import type { SandboxRunner } from "@lookai/sandbox";
 import type { RuntimeConfig, TurnHandler, UsageTracker } from "./types.js";
@@ -42,6 +43,7 @@ export class AgentRuntime {
   private promptAssembler?: PromptAssembler;
   private hookEngine?: HookEngine;
   private sandbox?: SandboxRunner;
+  private memoryStore?: MemoryStore;
 
   constructor(
     router: DualModelRouter,
@@ -56,6 +58,7 @@ export class AgentRuntime {
     this.promptAssembler = deps?.promptAssembler;
     this.hookEngine = deps?.hookEngine;
     this.sandbox = deps?.sandbox;
+    this.memoryStore = deps?.memoryStore;
     this.mode = deps?.mode ?? "coding" as SessionMode;
   }
 

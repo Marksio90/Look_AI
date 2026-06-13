@@ -122,6 +122,9 @@ importers:
       '@lookai/memory':
         specifier: workspace:*
         version: link:../memory
+      '@lookai/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@lookai/security':
         specifier: workspace:*
         version: link:../security
