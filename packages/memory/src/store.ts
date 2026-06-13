@@ -19,12 +19,16 @@ export class MemoryStore {
     this.sessionDir = join(baseDir, "sessions");
     this.lookaiMdPath = join(baseDir, "LOOKAI.md");
     this.memoryDir = join(baseDir, "memory");
+    this.artifactDir = join(baseDir, "artifacts");
     this.currentSessionId = this.generateId();
     if (!existsSync(this.sessionDir)) {
       mkdirSync(this.sessionDir, { recursive: true });
     }
     if (!existsSync(this.memoryDir)) {
       mkdirSync(this.memoryDir, { recursive: true });
+    }
+    if (!existsSync(this.artifactDir)) {
+      mkdirSync(this.artifactDir, { recursive: true });
     }
   }
 
@@ -107,7 +111,6 @@ export class MemoryStore {
   deleteMemory(key: string): boolean {
     const path = join(this.memoryDir, `${safeKey(key)}.md`);
     if (!existsSync(path)) return false;
-    // eslint-disable-next-line no-restricted-syntax
     const { unlinkSync } = require("node:fs");
     unlinkSync(path);
     return true;
@@ -159,7 +162,6 @@ export class MemoryStore {
   deleteArtifact(name: string): boolean {
     const path = join(this.artifactDir, `${safeKey(name)}.md`);
     if (!existsSync(path)) return false;
-    // eslint-disable-next-line no-restricted-syntax
     const { unlinkSync } = require("node:fs");
     unlinkSync(path);
     return true;

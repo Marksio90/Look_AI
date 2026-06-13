@@ -9,6 +9,7 @@ import { MemoryStore } from "@lookai/memory";
 import { SearxngAdapter, WebSearchTool, WebFetchTool } from "@lookai/web";
 import type { TurnEvent, SessionMode } from "@lookai/core";
 import { MemoryToolFactory } from "./memory-tool.js";
+import { ArtifactToolFactory } from "./artifact-tool.js";
 
 const CODING_SYSTEM_PROMPT = `You are LookAI, a local coding assistant. You have access to tools:
 - read(path, offset?) — read a file with line numbers.
@@ -20,7 +21,7 @@ const CODING_SYSTEM_PROMPT = `You are LookAI, a local coding assistant. You have
 - ingest(path) — ingest a file (.txt, .md, .json, .csv, .tsv) into context. CSV converts to markdown table.
 - web_search(query, limit?) — search the web for information.
 - web_fetch(url) — fetch a webpage and extract content as markdown.
-- memory(action, key?, content?, query?) — save/load/search conversation memory (opt-in).
+- artifact(action, name?, content?) — create/read/list non-code artifacts (documents, notes).
 
 Rules:
 1. One tool per turn.
@@ -35,6 +36,7 @@ const ASSISTANT_SYSTEM_PROMPT = `You are LookAI, a helpful local assistant. You 
 - web_fetch(url) — fetch a webpage and extract content as markdown.
 - bash(command) — run a bash command (use sparingly, only for harmless queries).
 - memory(action, key?, content?, query?) — save/load/search conversation memory (opt-in).
+- artifact(action, name?, content?) — create/read/list non-code artifacts (documents, notes).
 
 Rules:
 1. One tool per turn.
@@ -109,6 +111,8 @@ export default function App({ memoryEnabled = false, resumeMode = false, continu
       setSessionList(memoryStore.listSessions());
     }
   }, [continueMode]);
+
+  registry.register(ArtifactToolFactory(memoryStore));
 
   const systemPrompt = mode === "assistant" ? ASSISTANT_SYSTEM_PROMPT : CODING_SYSTEM_PROMPT;
   const runtime = new AgentRuntime(router, registry, { maxTurns: 25, systemPrompt, mode }, {
