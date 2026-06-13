@@ -102,10 +102,11 @@ export class SandboxRunner {
     // Log warning about running on host
     console.warn("[Sandbox] Docker not available — running on host (no isolation)");
     return new Promise((resolve) => {
-      const child = spawn("bash", ["-c", command], {
+      const child = spawn(command, {
         cwd: this.config.cwd ?? process.cwd(),
         env: process.env,
         timeout: this.config.timeoutMs,
+        shell: true,
       });
 
       let stdout = "";
