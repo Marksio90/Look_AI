@@ -6,6 +6,7 @@
   "scripts": {
     "build": "pnpm -r run build",
     "dev": "pnpm --parallel --filter @lookai/orchestrator --filter @lookai/web run dev",
+    "web": "pnpm run build && pnpm --parallel --filter @lookai/orchestrator --filter @lookai/web run dev",
     "dev:cli": "pnpm --filter @lookai/cli run dev",
     "dev:web": "pnpm --filter @lookai/web run dev",
     "dev:orch": "pnpm --filter @lookai/orchestrator run dev",

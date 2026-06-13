@@ -69,16 +69,14 @@ pnpm run build
 # 4. Uruchom testy
 pnpm run test
 
-# 5. Uruchom TUI agenta (terminal)
-pnpm start
+# 5. CAŁY stack na webie JEDNĄ komendą
+#    (build + orchestrator :3000/:3001 + Web UI :5173 + otwiera przeglądarkę)
+pnpm web
 
-# 6. ...albo cały stack webowy: orchestrator (:3000/:3001) + Web UI (:5173)
-pnpm dev
-
-# Pojedynczo, z roota i bez cd:
-#   pnpm dev:web    — tylko Web UI
-#   pnpm dev:orch   — tylko orchestrator (backend)
-#   pnpm dev:cli    — TUI w trybie dev (rebuild + run)
+# ...lub bez przebudowy, gdy pakiety są już zbudowane:
+pnpm dev            # orchestrator + Web UI równolegle
+pnpm start          # TUI agenta w terminalu
+# pnpm dev:web / dev:orch / dev:cli — pojedyncze części
 ```
 
 ---
