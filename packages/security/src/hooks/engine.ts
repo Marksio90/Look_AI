@@ -81,9 +81,10 @@ export function createTestAfterEditHook(testCommand = "pnpm run test"): ToolHook
     async handler(ctx): Promise<ToolResult | void> {
       const { spawn } = await import("node:child_process");
       return new Promise((resolve) => {
-        const child = spawn("bash", ["-c", testCommand], {
+        const child = spawn(testCommand, {
           cwd: ctx.projectRoot,
           stdio: "pipe",
+          shell: true,
         });
         let stdout = "";
         let stderr = "";
